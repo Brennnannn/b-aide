@@ -35,11 +35,11 @@ Runtime state that the structure can't show either (which agent is working on a 
 <project>/
   monteverdi/
     rules/                # see rules.md
-      prewriting/
-      outlining/
-      drafting/
-      editing/
-      revising/
+      dialogue/
+      scoping/
+      build/
+      edit/
+      revision/
     endeavors/
       checkout/
         checkout.md
@@ -170,12 +170,12 @@ Monteverdi runs an MCP server, a thin layer over its local `/api`, and attaches 
 | Tool | Does |
 |---|---|
 | `breadcrumb` | The target node in full plus its ancestors' bodies up to the root |
-| `check` | Run the editing rules and revising commands on the current commit at the test station; report back, no merge |
+| `check` | Run the edit rules and revision commands on the current commit at the test station; report back, no merge |
 | `submit` | Rebase, run every rule, merge if all pass (see [Merging a task](#merging-a-task)) |
 | `reopen` | Open a Dialogue on a node and pause |
-| `submit_plan` | Build planner only: validate a build plan and, if valid, render `<id>.build.md` (see [agents.md](agents.md#build-planner)) |
+| `submit_plan` | Scoping session only: validate a build plan and, if valid, render `<id>.build.md` (see [agents.md](agents.md#scoping-session)) |
 | `history` | A node's full Dialogue from its last pre-writeup commit |
-| `verdict` | Reviewer only: pass or fail for one revising rule, with notes and an optional rule suggestion (see [rules.md](rules.md#how-agent-rules-are-enforced)) |
+| `verdict` | Revision session only: pass or fail for one revision rule, with notes and an optional rule suggestion (see [rules.md](rules.md#how-agent-rules-are-enforced)) |
 
 A terminal command can sit on the same API for people to use; agents use the MCP tools.
 
@@ -200,7 +200,7 @@ complete                          ← you sign off on merges into this branch
   ```
 
   `git log --grep "Co-Authored-By: Monteverdi"` lists everything agents wrote. The email is a placeholder: GitHub shows a co-author's avatar only when the email belongs to a GitHub account, and otherwise shows the name alone.
-- **Worktree setup:** <a id="worktree-setup"></a>every worktree Monteverdi creates (endeavor, task, station) gets the project's dependencies installed, so editing rules can use the project's tools after each edit. The project sets a **setup command** when the repo is set up; Monteverdi suggests one from the lockfile (`pnpm install --frozen-lockfile`, `npm ci`, ...). With pnpm, packages are hard-linked from its global store, so an unchanged lockfile installs in seconds and uses little disk. When a task edits the manifest or lockfile, Monteverdi re-runs setup in that worktree before the next editing check.
+- **Worktree setup:** <a id="worktree-setup"></a>every worktree Monteverdi creates (endeavor, task, station) gets the project's dependencies installed, so edit rules can use the project's tools after each edit. The project sets a **setup command** when the repo is set up; Monteverdi suggests one from the lockfile (`pnpm install --frozen-lockfile`, `npm ci`, ...). With pnpm, packages are hard-linked from its global store, so an unchanged lockfile installs in seconds and uses little disk. When a task edits the manifest or lockfile, Monteverdi re-runs setup in that worktree before the next edit check.
 - **Rebase short-lived branches, merge long-lived ones.** A finished task rebases onto the endeavor branch's tip. The endeavor branch takes in `complete` by merging, never rebasing, so task branches built on it keep a valid base.
 
 ### Merging a task
@@ -214,25 +214,25 @@ Submitted tasks queue for the station and merge one at a time, so each rebase is
 
 ### Rules
 
-The station runs the project's **editing and revising rules** (in `monteverdi/rules/editing/` and `monteverdi/rules/revising/`). All selected rules must pass to merge. The full design, including the other three rule types, is in [rules.md](rules.md); in short:
+The station runs the project's **edit and revision rules** (in `monteverdi/rules/edit/` and `monteverdi/rules/revision/`). All selected rules must pass to merge. The full design, including the other three rule types, is in [rules.md](rules.md); in short:
 
 1. The station's code selects rules by the files the change touched; no model decides which run.
-2. **Editing rules** run first. The build session already ran them after each edit; the station runs them again, because the build step is never trusted.
-3. **Revising commands** run next, because they're cheap: `tsc`, lint, tests, or the project's own scripts. `check` runs only steps 2 and 3.
-4. **Agent revising rules** run last: a fresh **reviewer session** carries them out and must return a verdict for each rule by name.
+2. **Edit rules** run first. The build session already ran them after each edit; the station runs them again, because the build step is never trusted.
+3. **Revision commands** run next, because they're cheap: `tsc`, lint, tests, or the project's own scripts. `check` runs only steps 2 and 3.
+4. **Agent revision rules** run last: a fresh **revision session** carries them out and must return a verdict for each rule by name.
 
 On failure:
 - A mechanical rule sends the command output back to the build session.
-- An agent rule sends the reviewer's notes back.
-- If the reviewer decides **the Answer** is wrong, not the code, it opens a Dialogue on the node (the same path as a build that finds an Answer wrong).
+- An agent rule sends the revision session's notes back.
+- If the revision session decides **the Answer** is wrong, not the code, it opens a Dialogue on the node (the same path as a build that finds an Answer wrong).
 
 **Conflict prevention:** the build plan records the files each task expects to touch (`touches`). Monteverdi's code runs tasks whose `touches` overlap one after the other, never in parallel.
 
 ## Build
 
 - **Begin build** is available on any fully designed endeavor, not just the root, so parts can be built while siblings are still being planned.
-- It starts a **build planner** session that sizes the work, decides the build order, and splits it into tasks (often just one), recording the files each task touches, the existing code it should reuse, and the design nodes it needs. Build tasks don't have to match Sections one-to-one. Monteverdi then starts one fresh build session per task, each in its own worktree. Detailed design: [agents.md](agents.md#build-planner).
-- **The plan is a file**, `<id>.build.md`, rendered by Monteverdi from what the planner submits: tasks, order, the node IDs each task builds, the files each touches. You can review it before any code is written. "Plan" always means this file.
+- It starts a **scoping session** that sizes the work, decides the build order, and splits it into tasks (often just one), recording the files each task touches, the existing code it should reuse, and the design nodes it needs. Build tasks don't have to match Sections one-to-one. Monteverdi then starts one fresh build session per task, each in its own worktree. Detailed design: [agents.md](agents.md#scoping-session).
+- **The plan is a file**, `<id>.build.md`, rendered by Monteverdi from what the scoping session submits: tasks, order, the node IDs each task builds, the files each touches. You can review it before any code is written. "Plan" always means this file.
 - **Task IDs** are `<id>.build.<n>` (e.g. `checkout.4f1a2.build.1`); "build" has non-hex letters, so it never clashes with a node segment.
 - **Dependencies:** see [Dependencies](#dependencies).
 - **Build commits carry a trailer**, `Monteverdi-Node: <id>`, one per node built. A rebase keeps the commit message, so the trailer survives step 1 above. A node is **built** when such a commit is on the endeavor branch, which in this flow means it passed the test station. It's **stale** when its Answer changed after that commit.
@@ -251,7 +251,7 @@ Depends on: [Ledger](checkout.e81d4.31af0)
 Everything after that is mechanical. On **Begin build** for an endeavor:
 
 1. Collect every `Depends on:` line in its subtree.
-2. Drop the ones pointing inside the subtree; those only affect build order, which the build planner sets and code checks.
+2. Drop the ones pointing inside the subtree; those only affect build order, which the scoping session sets and code checks.
 3. Each one pointing outside the subtree must be **solved** for Begin build to be available. Otherwise the UI says why, for example "Blocked: Ledger is discussing."
 4. A task that builds a node runs only once each of that node's dependencies is **built**. Until then it waits in the queue.
 
@@ -262,4 +262,4 @@ The validator rejects cycles, including a node depending on its own ancestor. De
 ## Open
 
 - **Operational output.** Design conversation lives in the files, but sessions still produce operational output: permission prompts, errors, "blocked on X", progress while carrying out a Solution. These need a home in Monteverdi's UI (permission prompts need a real control, not a reply in a file). Decide when we build the UI.
-- **Agent designs.** Each agent (build planner, build session, reviewer, ...) gets a detailed design. First sketches are in [agents.md](agents.md).
+- **Agent designs.** Each agent (scoping session, build session, revision session, ...) gets a detailed design. First sketches are in [agents.md](agents.md).
