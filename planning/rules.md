@@ -70,13 +70,15 @@ Being skills, the same rules also work as ordinary skills in your own Claude Cod
 
 **How many rules is up to you.** Dialogue and scoping rules are all injected, and every injected rule costs context on every call; edit rules all run after matching edits. Monteverdi doesn't limit them. If sessions get slow or expensive, remove or shorten rules.
 
-**Personal rules** live in `~/.monteverdi/rules/<type>/` (same five folders, same format) and apply to every project. Monteverdi reads both locations; when a personal rule and a project rule of the same type share a name, the project's wins. Personal rules aren't in the repo, so anyone else on the project doesn't get them; to keep history honest, each verdict records the rule's source (`project` or `personal`).
+**Personal rules** live in `~/.monteverdi/rules/<type>/` (same five folders, same format) and apply to every project. Monteverdi reads both locations; when a personal rule and a project rule of the same type share a name, the project's wins. Personal rules aren't in the repo, so anyone else on the project doesn't get them; to keep history honest, each verdict records the rule's source (`project` or `personal`). The UI shows where a personal rule is shadowed by a project rule of the same name, so a collision is never silent.
+
+**Your working style is a personal rule.** There's no separate editable base prompt: each agent's instructions are Monteverdi's fixed layer (code) followed by its rules, and how you like to work goes in a personal rule of that step's type, e.g. `~/.monteverdi/rules/dialogue/my-style/`. Only Dialogue and scoping take a style; build sessions follow build rules once you press Build plan, and revision is checks, not style.
 
 ## Injected, not invoked
 
 Dialogue, scoping, build and agent revision rules all reach their agent the same way:
 
-- **Injected:** Monteverdi puts the rule's full text into the agent's instructions (`--append-system-prompt-file`), rather than loading it as a skill. A skill's body only loads if the model decides to invoke it, and models sometimes don't; injected text is always in context, and cached.
+- **Injected:** Monteverdi puts the rule's full text into the agent's instructions (after its fixed text, in the file passed with `--system-prompt-file`; see [agents.md](agents.md#configuring-any-agent)), rather than loading it as a skill. A skill's body only loads if the model decides to invoke it, and models sometimes don't; injected text is always in context, and cached.
 - **Embedded commands:** a skill can contain `` !`command` ``, which Claude Code runs when the skill loads, pasting the output in. Injection bypasses that, so **Monteverdi runs those commands itself** when it starts the agent and injects their output. The agent gets current facts (the token list, the database schema) without having to fetch them.
 
 ## Dialogue rules

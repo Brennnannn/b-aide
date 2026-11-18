@@ -17,7 +17,7 @@ Status is worked out from the files and git, not stored:
 |---|---|
 | open | no response yet |
 | sectioned | has Sections |
-| discussing | has a Dialogue, no Answer |
+| discussing | has a Dialogue, no Answer (including a sectioned node whose children are being rearranged) |
 | solved | has an Answer only |
 | reopened | has an Answer and a Dialogue |
 | built | solved, and a build commit for it is on the endeavor branch |
@@ -147,25 +147,26 @@ Refunds go through Stripe's Refund API, keyed by the original PaymentIntent. ...
   </details>
   ```
 - **The Dialogue lives in its own file**, `<id>.dialogue.md`, next to the node; the UI shows it inline. It doesn't count toward the split budget and isn't included in breadcrumb reads, so a long conversation neither pushes siblings out into their own files nor leaks into other agents' context.
-- **Condensing:** when you say a Dialogue is done ("finalize"), Monteverdi makes two commits:
+- **Condensing ("finalize"):** the session finalizes once you've agreed to the decisions (you say "let's do A" and nothing is left open), or when you tell it to. It calls `finalize_answer` or `finalize_sections`, and Monteverdi makes two commits:
   1. **Pre-writeup:** commits the dialogue file as it stands, the full conversation.
   2. **Writeup:** the session condenses the Dialogue into the Answer and deletes the dialogue file; Monteverdi commits that. You review it like any other change.
 
   The full conversation is always the version just before the writeup commit, so the `history` tool (see [Agent tools](#agent-tools)) can return it when a session wants to know how a decision was reached.
 - **Who commits:** Dialogue sessions never commit. They share the endeavor worktree, so Monteverdi makes every planning commit there. Between condensings the dialogue file is simply uncommitted on disk. (Build sessions commit normally, on their own task branches.)
-- **Solution → Sections:** when a Dialogue shows the endeavor has several parts, the session condenses what was decided into the endeavor's explanation and creates the child endeavors, moving any discussion specific to one child into that child's own new Dialogue. A node has a Solution *or* Sections, so the parent's Dialogue is always condensed before the switch.
-- **Reopening:** adding a Dialogue to a solved Solution reopens it.
+- **Solution → Sections:** when a Dialogue shows the endeavor has several parts, the session shapes the children with three tools, `create_child`, `update_child` and `delete_child`, which write immediately (uncommitted, like the dialogue file). Then `finalize_sections` condenses what was decided for the whole into the endeavor's explanation and closes the Dialogue with the same two commits. What was decided about one child goes in that child's explanation. What's still open about one child becomes its **seed**: an opening Claude turn in that child's new Dialogue that sets out where the discussion stands, so the open question turns up where you'll pick it up. A seed summarizes; it never moves your turns, which code couldn't verify, and the full parent conversation stays reachable with `history`. A node has a Solution *or* Sections, so the parent's Dialogue is always condensed before the switch.
+- **Rearranging Sections:** a Dialogue can also open on a sectioned node, about the split itself; replying after `finalize_sections` opens one. Merging, re-scoping, deleting or adding children is judgment, so there's no mechanism per case: the session uses the same three child tools and finalizes with `finalize_sections`. Deleting a built child removes the node, not its code; what happens to that code is part of the parent's judgment, written into a child's explanation (e.g. a replacement that removes it). A child whose Answer a change invalidates gets `reopen`. Purely mechanical changes (reorder, rename, add an empty child) are UI actions with no session.
+- **Reopening:** adding a Dialogue to a solved Solution reopens it. The session stays open after finalizing, so if you object ("wait a second!") it simply replies, which reopens the node. Solved and reopened are never flags; they follow from whether the node has an Answer and a dialogue file.
 
 ## Sessions
 
-- **One session per Solution's Dialogue, resumed while its cache is warm.** Its line of reasoning lives in the dialogue file, so when a Dialogue is reactivated after the prompt cache has expired, Monteverdi starts a fresh session that reads the breadcrumb and the dialogue file instead of resuming (see [agents.md](agents.md#dialogue-session)).
+- **One session per Solution's Dialogue, resumed while its cache is warm.** Its line of reasoning lives in the dialogue file, so when a Dialogue is reactivated after the prompt cache has expired, Monteverdi starts a fresh session that reads the breadcrumb and the dialogue file instead of resuming, unless the old session is small enough that resuming costs no more (see [agents.md](agents.md#dialogue-session)).
 - **Builds get a fresh session** per build task, working from the condensed Answers rather than the planning conversation, to keep its context lean.
 - **Monteverdi starts every session itself**, as a separate process. Sessions don't spawn subagents to do Monteverdi's work, so results land in files and git instead of piling up in a parent session's context.
 - **Claude speaks into the files.** Design conversation happens in Dialogues, not chat. Operational output is still open (see [Open](#open)).
 
 ## Agent tools
 
-Monteverdi runs an MCP server, a thin layer over its local `/api`, and attaches it to every session it starts. It's the agent's single way into Monteverdi:
+Monteverdi runs an MCP server, a thin layer over its local `/api`, and attaches it to every session it starts. It's the agent's single way into Monteverdi. **Every change a session makes to Monteverdi's files goes through these tools** (dialogue turns, Answers, new nodes, build plans): the session passes structured data, and code validates it and writes the files. Sessions that only design or plan therefore get no file-writing tools.
 
 | Tool | Does |
 |---|---|
@@ -175,6 +176,12 @@ Monteverdi runs an MCP server, a thin layer over its local `/api`, and attaches 
 | `reopen` | Open a Dialogue on a node and pause |
 | `submit_plan` | Scoping session only: validate a build plan and, if valid, render `<id>.build.md` (see [agents.md](agents.md#scoping-session)) |
 | `history` | A node's full Dialogue from its last pre-writeup commit |
+| `reply` | Dialogue session only: post its turn (message, Findings); code writes it into the dialogue file |
+| `finalize_answer` | Dialogue session only, on finalize: the Answer; code writes it into the node and deletes the dialogue file |
+| `create_child` | Dialogue session only: a new child (title, explanation, optional `depends_on` and seed); code assigns the ID and writes it |
+| `update_child` | Dialogue session only: change a child's title, explanation or `depends_on`; its ID stays |
+| `delete_child` | Dialogue session only: delete a child and its subtree, with a reason |
+| `finalize_sections` | Dialogue session only, on finalize: the endeavor's revised explanation and optional `depends_on`; code writes it, deletes the dialogue file and makes the two commits |
 | `verdict` | Revision session only: pass or fail for one revision rule, with notes and an optional rule suggestion (see [rules.md](rules.md#how-agent-rules-are-enforced)) |
 
 A terminal command can sit on the same API for people to use; agents use the MCP tools.
@@ -230,7 +237,7 @@ On failure:
 
 ## Build
 
-- **Begin build** is available on any fully designed endeavor, not just the root, so parts can be built while siblings are still being planned.
+- **Plan build** is available on any fully designed endeavor, not just the root, so parts can be built while siblings are still being planned.
 - It starts a **scoping session** that sizes the work, decides the build order, and splits it into tasks (often just one), recording the files each task touches, the existing code it should reuse, and the design nodes it needs. Build tasks don't have to match Sections one-to-one. Monteverdi then starts one fresh build session per task, each in its own worktree. Detailed design: [agents.md](agents.md#scoping-session).
 - **The plan is a file**, `<id>.build.md`, rendered by Monteverdi from what the scoping session submits: tasks, order, the node IDs each task builds, the files each touches. You can review it before any code is written. "Plan" always means this file.
 - **Task IDs** are `<id>.build.<n>` (e.g. `checkout.4f1a2.build.1`); "build" has non-hex letters, so it never clashes with a node segment.
@@ -248,14 +255,14 @@ Partial and full refunds against captured payments.
 Depends on: [Ledger](checkout.e81d4.31af0)
 ```
 
-Everything after that is mechanical. On **Begin build** for an endeavor:
+Everything after that is mechanical. On **Plan build** for an endeavor:
 
 1. Collect every `Depends on:` line in its subtree.
 2. Drop the ones pointing inside the subtree; those only affect build order, which the scoping session sets and code checks.
-3. Each one pointing outside the subtree must be **solved** for Begin build to be available. Otherwise the UI says why, for example "Blocked: Ledger is discussing."
+3. Each one pointing outside the subtree must be **solved** for Plan build to be available. Otherwise the UI says why, for example "Blocked: Ledger is discussing."
 4. A task that builds a node runs only once each of that node's dependencies is **built**. Until then it waits in the queue.
 
-The validator rejects cycles, including a node depending on its own ancestor. Depending on a sectioned endeavor means depending on its whole subtree.
+Sessions never write `Depends on:` lines themselves: they pass the IDs as a `depends_on` parameter (on `finalize_answer` and the child tools), and code checks each ID exists and writes the lines in one format. The validator rejects cycles, including a node depending on its own ancestor. Depending on a sectioned endeavor means depending on its whole subtree.
 
 **Across root endeavors** (rare; mostly when two roots must happen in sequence): a node in another root endeavor counts as **built** only once that root has been signed off into `complete`. The waiting task then picks it up when `complete` is merged into its endeavor branch. Endeavor branches are never merged into each other, so no endeavor ever carries code you haven't approved.
 
