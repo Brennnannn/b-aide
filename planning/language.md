@@ -233,7 +233,7 @@ On failure:
 - An agent rule sends the revision session's notes back.
 - If the revision session decides **the Answer** is wrong, not the code, it opens a Dialogue on the node (the same path as a build that finds an Answer wrong).
 
-**Conflict prevention:** the build plan records the files each task expects to touch (`touches`). Monteverdi's code runs tasks whose `touches` overlap one after the other, never in parallel.
+**Conflict prevention:** the build plan records the files each task expects to touch (`files`). Monteverdi's code runs tasks whose `files` overlap one after the other, never in parallel.
 
 ## Build
 

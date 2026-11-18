@@ -142,7 +142,7 @@ to the task and list the components the task should reuse, with their paths.
 
 ## Build rules
 
-Guidance for building. **The scoping session chooses them (code adds those whose `paths` match a task's `touches`); Monteverdi injects them into the build session.**
+Guidance for building. **The scoping session chooses them (code adds those whose `paths` match a task's `files`); Monteverdi injects them into the build session.**
 
 ```markdown
 ---
@@ -156,7 +156,7 @@ Current tokens:
 !`node monteverdi/rules/build/ui/list-tokens.mjs`
 ```
 
-- **Choosing:** the scoping session reads only the frontmatter of every build rule. `description` says when the rule applies; `paths` says which files it concerns, and code adds a rule automatically when its `paths` match a task's `touches`. The chosen rules go in each task's entry in `<id>.build.md`, next to the tools that task needs.
+- **Choosing:** the scoping session reads only the frontmatter of every build rule. `description` says when the rule applies; `paths` says which files it concerns, and code adds a rule automatically when its `paths` match a task's `files`. The chosen rules go in each task's entry in `<id>.build.md`, next to the tools that task needs.
 - **Tools:** a build rule can declare `tools:` (see [Tools](#tools)); choosing the rule brings them into the build session. The scoping session chooses rules, never tools directly.
 - **Skills are offered too** (decided 2026-11-18). Code lists the repo's skills (`.claude/skills/*/SKILL.md`, Claude Code's project skills folder) and your personal ones (`~/.claude/skills/`) next to the build rules, by name and description, and the scoping session can choose them for a task like any build rule. A chosen skill is injected like a build rule (not loaded as a Claude Code skill, which the model might not invoke), with one line saying where its folder is so its relative paths still work. Skills have no `paths`, so one is never added automatically: a "deploy to staging" skill is simply never chosen. On a name clash, a build rule (project, then personal) wins over a skill (repo, then personal): the rule is the version written for Monteverdi. **Skills reach build sessions only**, as the scoping session chooses: no other agent has one choosing guidance by description, and an agent revision rule owes a verdict, so which ones run must be deliberate, not every skill in the repo. A project that wants a skill's text in another step writes a rule of that type that embeds it (`` !`cat .claude/skills/code-review/SKILL.md` ``), with no new mechanism.
 - **Pure guidance.** An instruction like "run tsc after editing" is followed at the model's discretion. Anything required becomes an edit or revision rule.

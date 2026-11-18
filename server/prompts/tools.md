@@ -69,7 +69,7 @@ plan file for the user to approve.
 | `tasks` | array, required, at least 1 | The tasks, in a sensible reading order. Other fields refer to a task by its position, starting at 1. |
 | `tasks[].nodes` | string[], required, at least 1 | IDs of the nodes this task builds. Every node marked to build goes in exactly one task. |
 | `tasks[].after` | integer[] | Positions of tasks this one waits for, beyond what its nodes' dependencies already require: when the code shows it needs something another task creates. |
-| `tasks[].touches` | string[], required, at least 1 | Files and glob patterns, relative to the repository root, that this task will create or edit. As narrow as you can name them. |
+| `tasks[].files` | string[], required, at least 1 | Files and glob patterns, relative to the repository root, that this task will create or edit. As narrow as you can name them. |
 | `tasks[].rules` | string[] | Names of build rules and skills that fit this task beyond those its files bring. |
 | `tasks[].goal` | string, required | How this task fits the plan: what it takes from earlier tasks and what later tasks will use from it, such as a function name or a data shape. The Answers say what to build, so leave that to them. If nearby code should be left alone, say so here. |
 | `tasks[].reuse` | array of `{path, use}` | Existing code the task should use. |
@@ -78,7 +78,7 @@ plan file for the user to approve.
 | `tasks[].done` | string, required | What to check before submitting the task: observable results, including what later tasks rely on. |
 | `response` | string | Only when revising after feedback: what you changed in reply and, for any point you didn't follow, why. Monteverdi shows it under the feedback. |
 
-**Fixed silently** (one possible meaning): a rule the task's `touches` would bring anyway; a
+**Fixed silently** (one possible meaning): a rule the task's `files` would bring anyway; a
 leading `./`; duplicate entries.
 
 **Checks and errors.** Every problem is returned at once, as a numbered list headed `The plan
@@ -94,9 +94,9 @@ has N problems; fix them and submit the whole plan again:`
 | No task waits on itself | `Task 2, after: a task can't wait for itself.` |
 | No cycles, across dependencies and `after` | `Tasks 1 and 2 wait on each other: task 1 builds Refunds, which depends on Ledger in task 2, and task 2's after names task 1.` |
 | Rules exist | `Task 1, rules: no build rule or skill "uii". Build rules: ui, api, db. Skills: testing, migrations.` |
-| `touches` are relative and inside the repo | `Task 1, touches: "../shared/x.ts" is outside the repository.` |
-| `touches` don't cover everything | `Task 1, touches: "**" covers every file, so this task would run alone and load every rule. Name the folders it works in.` |
-| `touches` are valid globs | `Task 1, touches: "src/[pages" isn't a valid pattern.` |
+| `files` are relative and inside the repo | `Task 1, files: "../shared/x.ts" is outside the repository.` |
+| `files` don't cover everything | `Task 1, files: "**" covers every file, so this task would run alone and load every rule. Name the folders it works in.` |
+| `files` are valid globs | `Task 1, files: "src/[pages" isn't a valid pattern.` |
 | `reuse` paths exist | `Task 2, reuse: packages/ui/Buton.tsx doesn't exist.` |
 | Text fields aren't empty | `Task 3: done is empty.` |
 | No earlier `reopen` this run | `This build was cancelled by reopen, so there's no plan to submit. End your turn.` |
