@@ -81,6 +81,28 @@ Dialogue, scoping, build and agent revision rules all reach their agent the same
 - **Injected:** Monteverdi puts the rule's full text into the agent's instructions (after its fixed text, in the file passed with `--system-prompt-file`; see [agents.md](agents.md#configuring-any-agent)), rather than loading it as a skill. A skill's body only loads if the model decides to invoke it, and models sometimes don't; injected text is always in context, and cached.
 - **Embedded commands:** a skill can contain `` !`command` ``, which Claude Code runs when the skill loads, pasting the output in. Injection bypasses that, so **Monteverdi runs those commands itself** when it starts the agent and injects their output. The agent gets current facts (the token list, the database schema) without having to fetch them.
 
+## Tools
+
+Decided 2026-11-18. A session gets tools (things it calls while it works, like a browser or a database) only through its rules. Any rule an agent reads (Dialogue, scoping, build, agent revision) can declare them:
+
+```markdown
+---
+name: ui
+description: Building or changing React pages and components, and checking them in a browser.
+paths: ["src/**/*.tsx"]
+tools: [playwright]
+---
+The dev server's port is in `$PORT`. Check each changed page at 375px and 1280px wide. ...
+```
+
+- **What `tools:` names:** MCP servers from the project's `.mcp.json` (Claude Code's standard file at the repo root, the one your own sessions load), and Claude Code's built-in tools by name (`WebFetch`, `WebSearch`). A personal rule may also name one of your user-scope servers. Monteverdi keeps no list of its own: the repo already says what servers it has and how to start them.
+- **A session loads the union of its rules' tools.** For a build session, the rules in its task; for a revision session, its selected agent rules (`ui-check` needs the browser); for Dialogue and scoping, all of theirs, since they're all injected. Code copies each named server's definition from `.mcp.json` into the run's MCP config (with Monteverdi's own server, under `--strict-mcp-config`), adds `mcp__<server>__*` to `--allowedTools` so a headless run never waits on a prompt, and adds built-in names to `--tools`.
+- **Rules, not a catalog, because a server has no description.** `.mcp.json` says how to start a server, not when a task needs it. The rule says when (its description) and how to use it here (its body); the server's own tool descriptions say what each tool takes. A project that wants builds to use a browser writes one short build rule for it.
+- **A skill's tools.** A skill chosen as a build rule brings the servers its own `allowed-tools` names (Claude Code's field; `mcp__playwright__browser_navigate` can only mean the `playwright` server), plus any `tools:` key added to its frontmatter. A skill that already pre-approves a server's tools needs no edit.
+- **Checked before a step starts.** A rule naming a server that isn't in `.mcp.json` (or your user scope, for a personal rule), or a built-in that doesn't exist, keeps that step from starting, and the UI names the rule and the tool. For build rules that means Plan build isn't available, since the scoping session couldn't fix it.
+- **Plugins aren't loaded.** `--plugin-dir` would bring a plugin's hooks and subagents along with its servers and skills. Put a plugin's server in `.mcp.json`; use its skills as rules.
+- **Secrets** stay as `${VAR}` in `.mcp.json`; the session's environment carries the values from the project's `.env` (see [agents.md](agents.md#launch-to-verify)).
+
 ## Dialogue rules
 
 How this project likes designs worked out. **Monteverdi injects every Dialogue rule into every Dialogue session; nothing selects them.**
@@ -135,7 +157,8 @@ Current tokens:
 ```
 
 - **Choosing:** the scoping session reads only the frontmatter of every build rule. `description` says when the rule applies; `paths` says which files it concerns, and code adds a rule automatically when its `paths` match a task's `touches`. The chosen rules go in each task's entry in `<id>.build.md`, next to the tools that task needs.
-- **Tools:** a rule can declare `tools: [browser]`, naming tool catalog entries (see [agents.md](agents.md#scoping-session)); choosing the rule brings them into the build session.
+- **Tools:** a build rule can declare `tools:` (see [Tools](#tools)); choosing the rule brings them into the build session. The scoping session chooses rules, never tools directly.
+- **Skills are offered too** (decided 2026-11-18). Code lists the repo's skills (`.claude/skills/*/SKILL.md`, Claude Code's project skills folder) and your personal ones (`~/.claude/skills/`) next to the build rules, by name and description, and the scoping session can choose them for a task like any build rule. A chosen skill is injected like a build rule (not loaded as a Claude Code skill, which the model might not invoke), with one line saying where its folder is so its relative paths still work. Skills have no `paths`, so one is never added automatically: a "deploy to staging" skill is simply never chosen. On a name clash, a build rule (project, then personal) wins over a skill (repo, then personal): the rule is the version written for Monteverdi. **Skills reach build sessions only**, as the scoping session chooses: no other agent has one choosing guidance by description, and an agent revision rule owes a verdict, so which ones run must be deliberate, not every skill in the repo. A project that wants a skill's text in another step writes a rule of that type that embeds it (`` !`cat .claude/skills/code-review/SKILL.md` ``), with no new mechanism.
 - **Pure guidance.** An instruction like "run tsc after editing" is followed at the model's discretion. Anything required becomes an edit or revision rule.
 
 ## Edit rules

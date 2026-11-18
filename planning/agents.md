@@ -51,11 +51,11 @@ Monteverdi starts every agent itself. No agent starts another agent to do Montev
 | The nodes to build: every unbuilt or stale node in the subtree | How to group nodes into tasks, including splitting the work into several tasks |
 | Whether the scoping session's order respects every `Depends on:` line | The build order, so pieces that need other pieces come after them |
 | Which tasks can run in parallel: order satisfied and no overlapping `touches` | Each task's `touches` |
-| Build rules whose `paths` match a task's `touches`, added automatically | Further build rules, chosen by their descriptions |
-| Tools that chosen rules declare | Further tools, named from the tool catalog |
+| Build rules whose `paths` match a task's `touches`, added automatically | Further build rules and skills, chosen by their descriptions |
+| Tools: those its rules declare, from the project's `.mcp.json` | (Nothing: tools come only with rules) |
 | Validating and rendering the plan file, including each task's "Other tasks build" line | Each task's prose: goal, code to reuse, done |
 
-**`submit_plan`, not a file tool.** The scoping session hands its plan to Monteverdi's MCP tool `submit_plan` as structured data. Code validates it: every node to build is in exactly one task, every ID exists, every rule and tool exists, the order has no cycles and respects `Depends on:`. Errors come back in the tool result and the scoping session fixes them. On success, code renders `<id>.build.md` and the session ends. Read-only is therefore enforced by the tool list, not asked for.
+**`submit_plan`, not a file tool.** The scoping session hands its plan to Monteverdi's MCP tool `submit_plan` as structured data. Code validates it: every node to build is in exactly one task, every ID exists, every rule exists, the order has no cycles and respects `Depends on:`. Errors come back in the tool result and the scoping session fixes them. On success, code renders `<id>.build.md` and the session ends. Read-only is therefore enforced by the tool list, not asked for.
 
 **A task entry** (one per task in the plan):
 
@@ -66,24 +66,26 @@ Monteverdi starts every agent itself. No agent starts another agent to do Montev
 | `after` | Tasks it must come after for reasons only the code shows (task 2 calls a helper task 1 creates). `Depends on:` lines order the design; `after` adds the rest. Code checks it never contradicts a `Depends on:` line |
 | `touches` | The files and globs it expects to create or edit (name provisional) |
 | `rules` | Build rules (edit rules attach to every build session automatically, so they aren't listed) |
-| `tools` | Tool catalog entries |
+| Tools | Not chosen: code lists the tools its rules declare (see [Tools](rules.md#tools)) |
 | Goal | How the task fits the plan: what it takes from earlier tasks and what later tasks will use from it (a function name, a data shape). The Answers say what to build, so the goal doesn't restate them. The rare note on nearby code to leave alone goes here too |
 | **Reuse** | Existing code to use, as `{path, use}` entries: components, helpers, types. Finding these is the scoping session's job, so the build session doesn't build what already exists |
 | Done | What to check before `submit`: observable results, including what later tasks rely on |
 
 Answers are linked, not copied; the build session reads them with `breadcrumb`. Each prose field holds only what the scoping session knows and the Answers don't, so there's no second, paraphrased source of truth to drift. **No out-of-scope field** (decided 2026-11-18): other tasks' nodes are known to code, which renders "Other tasks build: …" under each task, and `touches` already says where a task works.
 
-Two fields belong to the plan rather than a task: **Approach** (one to three sentences for you on how the work was split) and, on a revision, an optional **response**: what changed in reply to your feedback and, above all, what the session declined and why. Your feedback goes in through the session's message; `response` comes out through `submit_plan`, and code writes it under your feedback in the Feedback block, so each round reads as feedback, then reply. Code shows what changed between plan versions alongside it.
+Two fields belong to the plan rather than a task: **Approach** (one to three sentences for you on how the work was split) and, on a revision, an optional **response**: what changed in reply to your feedback and, above all, what the session declined and why. Your feedback goes in through the session's message; `response` comes out through `submit_plan`, and code writes it under your feedback in the Versions block, so each round reads as feedback, then reply. Code shows what changed between plan versions alongside it.
 
-**The plan file you approve.** Code renders a readable header from what the scoping session submitted: the goal (the endeavor's summary), a table of tasks (nodes, `after`, `touches`, rules, tools), and which tasks run in parallel. The scoping session adds one field of its own, **Approach**: one to three sentences on how it split the work. **Build plan** is a separate click after you've read it. The two buttons are **Plan build** (starts the scoping session) and **Build plan** (approves the plan and starts the build sessions); the swap of verb and noun is deliberate (decided 2026-11-17).
+**The plan file you approve.** Code renders a readable header from what the scoping session submitted: the goal (the endeavor's summary), a table of tasks, and which tasks run in parallel. The scoping session adds one field of its own, **Approach**: one to three sentences on how it split the work. Layout and example under [the plan file](#scoping-session-the-plan-file). **Build plan** is a separate click after you've read it. The two buttons are **Plan build** (starts the scoping session) and **Build plan** (approves the plan and starts the build sessions); the swap of verb and noun is deliberate (decided 2026-11-17).
 
 **One plan per Plan build.** The scoping session covers the pressed node and its whole subtree in one session; children don't get sessions of their own. It submits one plan holding however many tasks it judges right, and code checks the whole plan: each task, and how the tasks fit together.
 
 **Revising a plan, one mechanism** (decided 2026-11-17). Whenever an earlier plan for the node never finished building (it's waiting for approval, or its build was cancelled by `reopen`), the scoping session revises it rather than starting over. Your feedback and a design change are the same case: an earlier plan plus what's new. Code computes what's new: your feedback, the Answer diffs in the subtree since the plan's brief was assembled, and the code changed on the endeavor branch since then. Tasks whose nodes have since been built drop out on their own, because those nodes are no longer to build. The fixed text has one general line for this ("if your first message includes an earlier plan, revise it"), and the first-message template has one optional part for it. The warm/fresh rule decides how it arrives: a warm session is resumed with only what's new; a cold one gets a fresh session with the brief, the earlier plan and what's new.
 
-- **Code changed since the plan:** when code assembles a brief it stores the endeavor branch's commit with the plan. On a revision it lists the files changed since then (`git diff --name-only`, leaving out `monteverdi/`, which the Answer diffs cover), marks each one that falls in a task's `touches`, and names the task or node that changed it, from the commit trailers. All of that is mechanical; whether a change matters to the plan is the session's judgment after re-reading those files.
-- **Feedback rounds live in the plan file:** code appends each round to a collapsed Feedback block at the end of `<id>.build.md`, so a fresh session sees earlier rounds and doesn't undo them, and you can see them too.
-- **Committed on Build plan:** one commit of the approved plan, Feedback block included. Drafts before approval stay uncommitted on disk, like a dialogue file between condensings. A revision works either way: a plan waiting for approval is on disk, and one whose build was cancelled is in git.
+- **Code changed since the plan:** when code assembles a brief it stores the endeavor branch's commit in the plan file's frontmatter (`base:`). On a revision it lists the files changed since then (`git diff --name-only`, leaving out `monteverdi/`, which the Answer diffs cover), marks each one that falls in a task's `touches`, and names the task or node that changed it, from the commit trailers. All of that is mechanical; whether a change matters to the plan is the session's judgment after re-reading those files.
+- **Rounds live in the plan file** (named 2026-11-18): code appends each round to a collapsed **Versions** block at the end of `<id>.build.md`, so a fresh session sees earlier rounds and doesn't undo them, and you can see them too. Each round opens with what prompted it: your feedback, or, for a revision without feedback, a line code writes ("Answers changed: Refund API"). Then the session's `response`, then what changed. Not "Feedback", since some rounds have none; not "Revisions", since revision is the step after build.
+- **No hand edits** (decided 2026-11-18). Code regenerates `<id>.build.md` on every version; your feedback is the only way to change a plan.
+- **No status in the file** (decided 2026-11-18). Waiting for approval, building, a task merged: that's runtime state, which the UI shows from Monteverdi's task state (see [language.md](language.md#concepts)).
+- **Committed on Build plan:** one commit of the approved plan, Versions block included. Drafts before approval stay uncommitted on disk, like a dialogue file between condensings. A revision works either way: a plan waiting for approval is on disk, and one whose build was cancelled is in git.
 - **No repo map from code.** A project that wants one gives the scoping session a scoping rule with an embedded command (a trimmed `git ls-files`, say), so each project tunes its own.
 
 **Runs as its own `claude` process**, started headless by Monteverdi, with its own transcript and session ID, so it shows in the UI and can be stopped or resumed. Not a subagent: Monteverdi isn't a Claude session, so there's no parent to host one. The Agent tool is left out of its tools, as for every agent (no agent starts agents).
@@ -92,7 +94,7 @@ Two fields belong to the plan rather than a task: **Approach** (one to three sen
 
 **Dependencies found while scoping.** Inside the subtree, the scoping session puts them in the plan's order and doesn't edit nodes. One outside the subtree that isn't declared means the design is incomplete: the scoping session calls `reopen` on that node with what it found, and the build doesn't start.
 
-**Tool catalog.** The project names its tool sets (e.g. `browser`, `db`), each with the MCP servers, skills or plugins it loads. A build rule can declare `tools:` in its frontmatter, so choosing the rule brings them along; the scoping session can also name catalog entries directly. Monteverdi starts each build session with exactly the tools in its entry and nothing else.
+**Tools come with rules** (decided 2026-11-18; replaces the tool catalog). There's no catalog of Monteverdi's own: the project's MCP servers are the ones in its `.mcp.json`, and a rule's `tools:` names the ones it needs (see [rules.md](rules.md#tools)). The scoping session chooses rules, never tools: a server has no description to choose it by, while a rule's description says when it applies and its body how to use the tool in this project. Each build session starts with exactly the tools its task's rules declare.
 
 **Configuration:**
 
@@ -130,7 +132,8 @@ No partial plan is ever kept.
 
 - the subtree is fully designed, and every `Depends on:` outside it is solved;
 - nothing in the subtree is being scoped or built. A parent can't be built while a child's build is running; the button says why, and you press it again once the child is done. Nothing starts automatically on unblock (waiting on another *build* would be new machinery; `Depends on:` waiting only works between tasks inside one build);
-- there's at least one unbuilt or stale node in it.
+- there's at least one unbuilt or stale node in it;
+- every scoping and build rule's `tools:` names a server or built-in tool that exists (see [rules.md](rules.md#tools)). The scoping session couldn't fix a missing one, so the button names the rule and the tool.
 
 **The brief's case file: the subtree as one tree** (decided 2026-11-17). Grouping nodes into tasks is the scoping session's job, so it gets the whole subtree. Code pastes it as a single tree, with everything known about each node under that node's heading, so the session never cross-references separate lists:
 
@@ -140,11 +143,98 @@ No partial plan is ever kept.
 - **`Depends on:`** each one, with whether it's inside or outside the subtree and, outside, whether it's built;
 - **files from earlier builds:** for built and stale nodes and for outside dependencies, the files their build commits changed (found with `git log --grep "Monteverdi-Node: <id>"`), the best leads for Reuse.
 
-Alongside the tree: the target's ID, title and breadcrumb; the **build-rule catalog** as frontmatter only (name, description, `paths`, `tools`; a chosen rule's full text is injected only into the build sessions that list it); and the **tool catalog** as names and descriptions (the servers and skills themselves load only in the build sessions that name them). Scoping rules, which guide the scoping session itself, are injected in full after its fixed text.
+Alongside the tree: the target's ID, title and breadcrumb; the **build-rule catalog** as frontmatter only (name, description, `paths`, `tools`; a chosen rule's full text is injected, and its servers load, only in the build sessions that list it), with the repo's and your skills as name and description (see [rules.md](rules.md#build-rules)). Scoping rules, which guide the scoping session itself, are injected in full after its fixed text.
+
+### Scoping session: the plan file
+
+Decided 2026-11-18. **`<id>.build.md` is the only record of a plan.** Code renders it from what `submit_plan` passes, and parses it back whenever it needs that data again: on Build plan, to start the build sessions with their files, rules and tools, and on a revision, as the earlier plan. There's no separate data file: every plan is read back at least once anyway, and revisions should be rare (and tuned to stay so). Nobody hand-edits the file, so code is its only writer and reader; the renderer and parser change together.
+
+Two readers. **You**, before Build plan: the header gives the shape at a glance. **Each build session**: code passes it **only its own task's entry**, verbatim, in its first message, so what it starts from is exactly what you approved. Other tasks' entries would be re-sent on every call and are similar-but-wrong material; "Other tasks build" gives it the boundary.
+
+Layout, top to bottom:
+
+- **Frontmatter:** `base:`, the endeavor branch's commit when the brief was assembled (for a revision's code changes).
+- **Header:** parent link; `# Build plan: <title> {#<id>.build}`; the goal (the endeavor's summary, linked to its node, copied by code); **Approach**.
+- **Task table:** Task, Builds, Files, Rules, Tools. Rules and tools are bare names, the ones code added included; where each came from doesn't matter to the build session, which just gets them.
+- **Order:** rendered, never parsed. Which tasks start at once, and for each task that waits, what it waits for and why: a dependency, the session's `after`, shared files (the later task in plan order waits), or an outside node not yet built.
+- **One entry per task:** heading `## Task <n>: <its nodes' titles> {#<task-id>}` (no title field; the `{#id}` makes a grep find it); then **Builds** (node links), **Files**, **Rules**, **Tools**, **After** (only when the session set it), **Goal**, **Reuse** (one bullet per `{path, use}`), **Done**, and **Other tasks build**.
+- **Versions:** collapsed, one round per revision (see [Revising a plan](#scoping-session)): what prompted it, the session's `response`, and a list of what changed, computed by code field by field (tasks added or removed, nodes moved, files, rules or tools changed; prose fields only named as "reworded"). The list is for you; a revising session gets the feedback and responses, not the list, and re-reads what it needs. Committed plans can also be compared in git.
+
+Parsing back into `submit_plan`'s shape drops the rules a task's files bring (the same slip `submit_plan` fixes silently) and the Tools line, which code derives from the rules, so the session sees what it chose.
+
+Example: Refunds, four nodes to build in three tasks, depending on the built Ledger outside the subtree.
+
+```markdown
+---
+base: 3f9c2a1
+---
+↑ [Refunds](checkout.4f1a2.b7d05.md)
+
+# Build plan: Refunds {#checkout.4f1a2.b7d05.build}
+[Refunds](checkout.4f1a2.b7d05): Partial and full refunds against captured payments.
+
+**Approach:** The API and its ledger entries share one database transaction, so they're
+one task. Emails are sent from the existing Stripe webhook rather than the API, so they
+build alongside it; the dialog waits for the endpoint.
+
+| Task | Builds | Files | Rules | Tools |
+|---|---|---|---|---|
+| [1](#checkout.4f1a2.b7d05.build.1) | Refund API, Ledger entries | `server/refunds/**`, `server/db/migrations/*_refunds.sql`, `server/routes.ts` | api, db | postgres |
+| [2](#checkout.4f1a2.b7d05.build.2) | Refund emails | `server/emails/refund-issued.tsx`, `server/webhooks/stripe.ts` | api, email, stripe-webhooks | |
+| [3](#checkout.4f1a2.b7d05.build.3) | Refund dialog | `src/components/RefundDialog.tsx`, `src/pages/orders/OrderDetail.tsx`, `src/api/refunds.ts` | ui | playwright |
+
+**Order**
+- Tasks 1 and 2 start at once: no dependencies between them and no shared files.
+- Task 3 waits for task 1: Refund dialog depends on Refund API.
+
+## Task 1: Refund API, Ledger entries {#checkout.4f1a2.b7d05.build.1}
+**Builds:** [Refund API](checkout.4f1a2.b7d05.1c2e3), [Ledger entries](checkout.4f1a2.b7d05.7a9f0)
+**Files:** `server/refunds/**`, `server/db/migrations/*_refunds.sql`, `server/routes.ts`
+**Rules:** api, db · **Tools:** postgres
+
+**Goal:** Adds `createRefund(orderId, amountCents)` in `server/refunds/create.ts` and the
+route `POST /api/orders/:id/refunds`. Task 3's dialog calls that route and shows
+`RefundError.code` on failure, so export `RefundError` from `server/refunds/errors.ts`.
+Leave `server/payments/capture.ts` alone.
+
+**Reuse:**
+- `server/ledger/post.ts`: `postEntry(tx, entry)` for both ledger lines, inside the
+  refund's transaction.
+- `server/stripe/client.ts`: the configured `stripe` instance; don't construct another.
+
+**Done:** A partial refund on a captured test payment returns 201 and writes two ledger
+lines that sum to zero; refunding more than the remaining amount returns 422 with
+`RefundError.code = "amount_exceeds_captured"`.
+
+**Other tasks build:** Refund emails (task 2), Refund dialog (task 3).
+
+## Task 2: Refund emails {#checkout.4f1a2.b7d05.build.2}
+…
+
+## Task 3: Refund dialog {#checkout.4f1a2.b7d05.build.3}
+…
+
+<details><summary>Versions (2)</summary>
+
+**Version 1 → 2**
+
+**Brennan:** Put emails in the API task, and the migration should be with the API.
+
+**Claude:** Moved the migration into task 1. Kept emails separate: they're sent from the
+webhook in `server/webhooks/stripe.ts`, not from the API, and the two tasks share no
+files, so running them at once can't conflict.
+
+Changes: task 1 files + `server/db/migrations/*_refunds.sql`; task 2 files
+− `server/db/**`; task 2 rules − db; task 1 done reworded.
+
+</details>
+```
+
+Task numbers in headings are the task IDs' `<n>`. After a cancelled build they continue from the highest used (tasks 4–6), while `submit_plan` refers to tasks by position; code translates, so the session sees positions and you see IDs.
 
 ### Scoping session: first message
 
-Decided 2026-11-18. One template with optional parts (`server/prompts/scoping.first-message.md`): a header with the target and the **worktree path** (Claude Code's prompt used to supply the working folder, and `Read` takes absolute paths; Dialogue's template got the same line); the target's breadcrumb; the subtree as one tree, with **outside dependencies inline** under each node that depends on them (status and files from their build); the build-rule and tool catalogs; optionally the earlier plan and what's new; and the instruction last, after the long case file. A fresh session gets the case file; a fresh revision adds the earlier plan; a warm resume gets only what's new. **The earlier plan is the JSON the session submitted**, so revising is editing the exact shape it resubmits; it's pasted unchanged, and a separate "built since" part names tasks whose nodes have been built since and drop out. What's new has optional sub-parts: feedback (earlier rounds with their responses, then this round), Answer diffs, and code changes, each present only when non-empty. **Code changes** are the plain `git diff --name-only <recorded commit>..HEAD` (leaving out `monteverdi/`), annotated mechanically: a path matching a task's `touches` is "in task N's files", one at or under a task's `reuse` path is "in task N's reuse", anything else "no task", plus "changed by <task> (<node>)" from the commit trailer. Marked files are listed first and always in full; unmarked ones are listed up to 25, beyond which the message gives a count and the path of a file in the run's folder (outside the repo) holding the full list, which the session can `Read`. It has no Bash, so code runs git and writes the file. The fixed text describes the situation ("when you're asked to revise an earlier plan"), not how it arrives, so one line covers every case.
+Decided 2026-11-18. One template with optional parts (`server/prompts/scoping.first-message.md`): a header with the target and the **worktree path** (Claude Code's prompt used to supply the working folder, and `Read` takes absolute paths; Dialogue's template got the same line); the target's breadcrumb; the subtree as one tree, with **outside dependencies inline** under each node that depends on them (status and files from their build); the build-rule catalog; optionally the earlier plan and what's new; and the instruction last, after the long case file. A fresh session gets the case file; a fresh revision adds the earlier plan; a warm resume gets only what's new. **The earlier plan is in the shape `submit_plan` takes**, parsed back by code from the plan file (see [the plan file](#scoping-session-the-plan-file)), so revising is editing the exact shape it resubmits; and a separate "built since" part names tasks whose nodes have been built since and drop out. What's new has optional sub-parts: feedback (earlier rounds with their responses, then this round), Answer diffs, and code changes, each present only when non-empty. **Code changes** are the plain `git diff --name-only <recorded commit>..HEAD` (leaving out `monteverdi/`), annotated mechanically: a path matching a task's `touches` is "in task N's files", one at or under a task's `reuse` path is "in task N's reuse", anything else "no task", plus "changed by <task> (<node>)" from the commit trailer. Marked files are listed first and always in full; unmarked ones are listed up to 25, beyond which the message gives a count and the path of a file in the run's folder (outside the repo) holding the full list, which the session can `Read`. It has no Bash, so code runs git and writes the file. The fixed text describes the situation ("when you're asked to revise an earlier plan"), not how it arrives, so one line covers every case.
 
 ### Scoping session: tools
 
@@ -152,7 +242,7 @@ Decided 2026-11-18; fuller draft of descriptions to come.
 
 - **`breadcrumb(id)`:** the node in full plus its ancestors' explanations, with a status line under the node's heading (to build, stale, built). An unknown ID's error names its nearest existing ancestor.
 - **`reopen(id, reason)`:** `reason` becomes the Dialogue's opening turn (or a new turn if one is open). For scoping it cancels the build; its result says to reopen any other nodes found and end the turn, and `submit_plan` is refused for the rest of the run.
-- **`submit_plan`:** the plan as structured data. Tasks are referred to by position (`after: [1]`); code assigns the `<id>.build.<n>` IDs, numbering after the highest used before so a new plan never reuses a cancelled task's branch. **Reuse is `{path, use}` entries**: code checks each path (file or folder) exists, and a revision can flag Reuse paths changed since the earlier plan; symbols are named in `use`. Code returns **every problem at once**, each naming the task and field and saying what to do, and the session resubmits the whole plan: one resubmit usually, and no second mechanism for patching. Shape errors come from the MCP schema check; meaning errors (a node in no task or two, a built node as work, unknown IDs, rules or tools, `after` out of range, cycles across dependencies and `after`, `touches` outside the repo or covering all of it, missing Reuse paths, empty fields, a second submit) come from our code, in our wording. **Slips with one possible meaning are fixed silently** rather than costing a resubmit: a rule the task's `touches` would bring anyway, a leading `./`, a duplicate entry. Anything with more than one reading (an unknown rule name, say) stays an error.
+- **`submit_plan`:** the plan as structured data. Tasks are referred to by position (`after: [1]`); code assigns the `<id>.build.<n>` IDs, numbering after the highest used before so a new plan never reuses a cancelled task's branch. **Reuse is `{path, use}` entries**: code checks each path (file or folder) exists, and a revision can flag Reuse paths changed since the earlier plan; symbols are named in `use`. Code returns **every problem at once**, each naming the task and field and saying what to do, and the session resubmits the whole plan: one resubmit usually, and no second mechanism for patching. Shape errors come from the MCP schema check; meaning errors (a node in no task or two, a built node as work, unknown IDs or rules, `after` out of range, cycles across dependencies and `after`, `touches` outside the repo or covering all of it, missing Reuse paths, empty fields, a second submit) come from our code, in our wording. **Slips with one possible meaning are fixed silently** rather than costing a resubmit: a rule the task's `touches` would bring anyway, a leading `./`, a duplicate entry. Anything with more than one reading (an unknown rule name, say) stays an error.
 
 ### Scoping session: future considerations
 
@@ -167,7 +257,7 @@ Not planned; noted in case it's ever wanted.
 - **Purpose:** builds one task from the build plan.
 - **Starts:** when Monteverdi reaches its task in the plan and its dependencies are built.
 - **Runs in:** its own task worktree and branch. Always a fresh session.
-- **Reads:** its entry in `<id>.build.md`, the design nodes it links to, and the build rules Monteverdi injected into its instructions.
+- **Reads:** its entry in `<id>.build.md`, which code passes verbatim in its first message, the design nodes it links to, and the build rules Monteverdi injected into its instructions.
 - **Writes:** code, committed on its task branch, with a `Monteverdi-Node: <id>` trailer per node it builds.
 - **Tools:** `check` while working, `submit` when done, `reopen` when an Answer turns out to be wrong.
 - **On conflicts:** rebases onto the endeavor branch and resolves them itself, since it knows what its changes are for.
@@ -207,6 +297,9 @@ Things about Claude Code's behaviour that the agent designs assume and that need
 - **The user's hooks and settings.** Hooks in `~/.claude/settings.json` (and the project's) would run inside our sessions. Test whether `--setting-sources` or a Monteverdi-supplied `--settings` file keeps them out.
 - **`--exclude-dynamic-system-prompt-sections`.** Probably moot once Claude Code's prompt is replaced; confirm from the first real request, and check whether Claude Code still adds environment details anywhere.
 - **Permissions.** Confirm that `Read`, `Grep` and `Glob` work without prompting in the working folder and `--add-dir` folders, and that `--allowedTools` with `mcp__monteverdi__*` lets our tools run headless.
+- **`${VAR}` in a `--mcp-config` file.** Claude Code expands `${VAR}` in `.mcp.json` from the environment; confirm it does the same in a file passed with `--mcp-config`, so secrets can stay in the session's environment (from the project's `.env`) rather than be written into the run folder. If it doesn't, code substitutes them into the run's config file, which is outside the repo.
+- **A `tools:` key in a skill's frontmatter.** Confirm Claude Code ignores a key it doesn't know, so adding one for Monteverdi doesn't break the skill in your own sessions.
+- **User-scope MCP servers.** A personal rule may name one of your own servers rather than one in `.mcp.json`. They live in Claude Code's own config; find a stable way to read one's definition (`claude mcp get <name>`, say) or fall back to `.mcp.json` only.
 - **The MCP schema check.** Confirm what a shape error (missing field, wrong type) looks like to the model, so our own errors can match its tone.
 
 ## Open

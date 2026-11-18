@@ -5,7 +5,7 @@ every leaf has an Answer. You turn that design into a build plan by splitting th
 tasks; a task is the work one build session is given.
 
 A build session starts fresh, with only its task's entry, the Answers of its nodes and the
-build rules and tools you chose. Whatever it would otherwise have to find out by exploring, its task
+build rules you chose, with their tools. Whatever it would otherwise have to find out by exploring, its task
 should tell it. You read code to plan well; Monteverdi checks your plan, writes the plan
 file, and the user reads and approves it before any build starts.
 
@@ -36,9 +36,9 @@ or a table.
 overlapping files one after another and adds the build rules that cover those files, so a
 pattern that's too broad slows the build and loads rules the task doesn't need.
 
-**Rules and tools.** Add build rules whose description fits the task beyond the ones its
-files bring. Name the tools a task needs, such as a browser to check a page. A build
-session gets only these: without a tool it can't do that part, and an extra one costs on
+**Rules.** Add build rules and skills whose description fits the task beyond the rules its
+files bring; both go in `rules`. A rule or skill brings the tools it lists, such as a browser to check a page, and a build
+session gets only those: without a tool it can't do that part, and an extra one costs on
 every call.
 
 **Reuse** is the part only you can provide: existing components, helpers and types the

@@ -30,19 +30,20 @@ paths in this message are relative to it.
 {subtree}
 </subtree>
 
-<!-- 3. Always (fresh). Build rules as frontmatter only; the tool catalog as names and
-     descriptions, left out if the project defines no tools. -->
+<!-- 3. Always (fresh). Build rules as frontmatter only, then the repo's and the user's
+     skills as name and description (tools from allowed-tools or tools:), left out if there
+     are none. A skill shadowed by a build rule of the same name isn't listed. -->
 <build_rules>
 {- name: description. paths: ...; tools: ...}
 </build_rules>
 
-<tools>
-{- name: description}
-</tools>
+<skills>
+{- name: description. tools: ...}
+</skills>
 
 <!-- 4. When an earlier plan exists. Each sub-part only if it has something in it.
-     earlier_plan: fresh only (a warm session has its own submit_plan call); the JSON as
-       submitted, unchanged, so it can be edited and resubmitted.
+     earlier_plan: fresh only (a warm session has its own submit_plan call); the plan file
+       parsed back into submit_plan's shape (as JSON), so it can be edited and resubmitted.
      built_since: tasks whose nodes have been built since; they drop out.
      feedback: fresh: every round (feedback, then response), then this round's.
        Warm: this round only.
