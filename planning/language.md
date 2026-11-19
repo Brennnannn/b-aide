@@ -86,7 +86,7 @@ Receives and verifies Stripe events. ...
 - **Child endeavors are the next heading level down and carry a full `{#id}`.** A Solution is the next heading level down, titled `Solution`, with no ID. A full ID on every heading means a grep for `checkout.4f1a2.b7d05` finds the node wherever it lives. GitHub shows `{#id}` as literal text; that's accepted, since agents and Monteverdi read these files far more than GitHub does, and a visible ID is easy to point at.
 - A child that lives in its own file keeps its heading in the parent, followed by one stub line: a link plus its summary.
 - Every file except the root's starts with a link to its parent. The ID already implies the parent; Monteverdi writes this link and checks it so plain markdown viewers can navigate up.
-- Root frontmatter also holds `lifecycle: planned | working`.
+- Root frontmatter also holds `lifecycle: planned | working` and `publish: <rule>`, the kind of change you picked when creating it (see [agents.md](agents.md#publish)).
 
 ## Splitting
 
@@ -207,7 +207,7 @@ complete                          ← you sign off on merges into this branch
 
   `git log --grep "Co-Authored-By: Monteverdi"` lists everything agents wrote. The email is a placeholder: GitHub shows a co-author's avatar only when the email belongs to a GitHub account, and otherwise shows the name alone.
 - **Worktree setup:** <a id="worktree-setup"></a>every worktree Monteverdi creates (endeavor, task, and the clean one for sign-off) gets the project's dependencies installed, so edit rules can use the project's tools after each edit. The project sets a **setup command** when the repo is set up; Monteverdi suggests one from the lockfile (`pnpm install --frozen-lockfile`, `npm ci`, ...). With pnpm, packages are hard-linked from its global store, so an unchanged lockfile installs in seconds and uses little disk. When a task edits the manifest or lockfile, Monteverdi re-runs setup in that worktree before the next edit check.
-- **Rule changes** (decided 2026-11-19) are the one kind of commit that reaches `complete` without an endeavor sign-off: the [legislator](agents.md#legislator) works on a branch off `complete`, your Accept moves `complete` forward, and code cherry-picks the commit onto every endeavor branch, so every branch checks against the same rules. Pushing them is for the publish design.
+- **Rule changes** (decided 2026-11-19) are the one kind of commit that reaches `complete` without an endeavor sign-off: the [legislator](agents.md#legislator) works on a branch off `complete`, your Accept moves `complete` forward, and code cherry-picks the commit onto every endeavor branch, so every branch checks against the same rules. They reach the remote like anything else on `complete`, through a [publish](agents.md#publish) procedure.
 - **Rebase short-lived branches, merge long-lived ones.** A finished task rebases onto the endeavor branch's tip. The endeavor branch takes in `complete` by merging, never rebasing, so task branches built on it keep a valid base.
 
 ### Merging a task

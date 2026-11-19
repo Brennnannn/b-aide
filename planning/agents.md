@@ -101,7 +101,12 @@ Consolidated 2026-11-19. What only the user may decide is a control in the UI, n
 | **Stop** on a `try_rule` run | The legislator's review, while a run is going | The run as stopped | The legislator carries on, told how long it ran |
 | **Stop** on a running check | A task's checks, while a revision command runs | That rule as failed, with its output so far | The build session gets the failure as usual |
 | **Retry** | A failed run | Nothing | That agent again, through the one path |
-| **Sign off** | An endeavor | To design with the [publish agent](#open) | To design |
+| **Publish kind** (decided 2026-11-19) | Creating a root endeavor: one of the project's publish rules | `publish: <rule>` in the root's frontmatter | Nothing |
+| **Sign off** | [The sign-off review](#publish-the-sign-off-review) | The `--no-ff` merge into `complete` | Its publish procedure, straight away (decided 2026-11-19) |
+| **Fix instead** (decided 2026-11-19) | An overridden failure, in the sign-off review | Nothing | A fix task for that rule |
+| **Request fix** (decided 2026-11-19) | The sign-off review: you describe what's wrong | Your words | A fix task briefed with them |
+| **Continue** (decided 2026-11-19) | A publish procedure paused at a `confirm` step | Nothing | The next step |
+| **Retry step**, **Skip step**, **Abort** (decided 2026-11-19) | A publish procedure stopped at a failing step | The choice | That step again, the next step, or nothing |
 
 Writing in a Dialogue and pressing Finalize also start sessions, but aren't yours alone: a Dialogue session finalizes on its own once you've agreed.
 
@@ -383,7 +388,7 @@ Decided 2026-11-19; only what differs from [Launching any agent](#launching-any-
 
 Decided 2026-11-19. Full descriptions, checks and error wording in `server/prompts/tools.md`.
 
-**Code does a task's git.** The build session edits files and leaves git to Monteverdi; it may still run `git diff` or `git log` to look. Every step of a task's git is mechanical, so code does it and no trailer can be forgotten. On `submit`, code commits the worktree on the task branch and puts the task's changes onto the endeavor branch's tip as **one commit per task**, with a `Monteverdi-Node:` trailer per node and the co-author trailers. One commit per task keeps the node history clean and makes a task easy to revert or cherry-pick. If that conflicts (rare, since tasks with overlapping `files` run one after another), code leaves the conflict markers in the worktree and `submit`'s result names the files and the task that changed them; the session resolves them and submits again. Git that needs judgment about how a project ships (release cuts, hotfixes, pushing) belongs to the publish agent, whose design is still to come.
+**Code does a task's git.** The build session edits files and leaves git to Monteverdi; it may still run `git diff` or `git log` to look. Every step of a task's git is mechanical, so code does it and no trailer can be forgotten. On `submit`, code commits the worktree on the task branch and puts the task's changes onto the endeavor branch's tip as **one commit per task**, with a `Monteverdi-Node:` trailer per node and the co-author trailers. One commit per task keeps the node history clean and makes a task easy to revert or cherry-pick. If that conflicts (rare, since tasks with overlapping `files` run one after another), code leaves the conflict markers in the worktree and `submit`'s result names the files and the task that changed them; the session resolves them and submits again. Git that needs judgment about how a project ships (release cuts, hotfixes, pushing) belongs to the [publish](#publish) step, which runs the project's own procedure.
 
 **The session writes the commit message**, as `submit`'s `message`: a subject and an optional body, following whatever conventions CLAUDE.md or its build rules set, since code can't know them and publishing may read history. Code appends the trailers.
 
@@ -443,7 +448,7 @@ Worked example: tasks 1 and 2 run in parallel. Task 1 is applied on tip T0 at 10
 
 ### Revision: sign-off
 
-Decided 2026-11-19. Before you sign off, the endeavor branch merges in `complete` (a conflict becomes a fix task, as for any [failure at sign-off](rules.md#when-revision-fails)). Code then creates a **clean worktree** at the merged commit, sets it up with the `.env` and a port, runs **every edit rule and revision command** there, and removes it. **Agent revision rules don't run at sign-off:** the change would be the whole endeavor, already reviewed task by task, and your sign-off is the judgment step. How sign-off shows failures and overrides belongs to the [publish agent](#open).
+Decided 2026-11-19. Before you sign off, the endeavor branch merges in `complete` (a conflict becomes a fix task, as for any [failure at sign-off](rules.md#when-revision-fails)). Code then creates a **clean worktree** at the merged commit, sets it up with the `.env` and a port, runs **every edit rule and revision command** there, and removes it. **Agent revision rules don't run at sign-off:** the change would be the whole endeavor, already reviewed task by task, and your sign-off is the judgment step. How sign-off shows failures and overrides is in [the sign-off review](#publish-the-sign-off-review).
 
 ### Revision: edits outside a task's files
 
@@ -503,7 +508,7 @@ Decided 2026-11-19; only what differs from [Launching any agent](#launching-any-
 
 *Detailed design in progress, 2026-11-19. Drafts: fixed text `server/prompts/legislator.md` (after the shared block `shared.md`), first message `legislator.first-message.md`, tools `tools.md`. Named the legislator (decided 2026-11-19): rule editing isn't one of the five steps, so it doesn't follow the "<step> session" pattern, and a distinct name reads clearly.*
 
-- **Purpose:** writes and changes the project's rules with you, any of the five types (decided 2026-11-19): `suggest_rule` mostly targets build rules, escalations mostly revision commands, and you may ask for any kind.
+- **Purpose:** writes and changes the project's rules with you, any of the six types (decided 2026-11-19; publish added the sixth): `suggest_rule` mostly targets build rules, escalations mostly revision commands, and you may ask for any kind.
 - **Reuses what the project has.** Where the project's linter, type checker or test runner can check something, a rule's command calls it; the legislator writes a script only where the stack has nothing that fits.
 - **Shows a command works** (decided 2026-11-19): before proposing one, it runs it on the current code, on a small sample it writes that the command should catch, and, when the request came from one, on the commit that prompted it (the task's last `submit` for an escalation, the reviewed commit for a suggestion). Code checks that commit out into a scratch worktree, runs setup, and removes it afterwards; nothing else is reproduced.
 - **Its own tools, no Bash** (decided 2026-11-19). Monteverdi's server lists tools per role, so these exist only for the legislator. `write_rule` takes the frontmatter as structured fields plus the body, and code validates it all at once before writing `SKILL.md`; `write_rule_file` writes a script in that rule's folder and nowhere else; `try_rule` runs a rule's command under the [command contract](rules.md#command-contract), on the current code, on sample files, or on the prompting commit, exactly as the hook or `submit` would. It also gets `breadcrumb` and `reopen` (decided 2026-11-19), so `shared.md` stays true for every agent; they cost little and a rule can touch the design. With `Read`, `Grep` and `Glob` for looking, it can't change anything outside the rules or touch git, so `shared.md`'s "Monteverdi's files change only through its tools" holds for rules too.
@@ -541,6 +546,48 @@ Decided 2026-11-19.
 - **A `try_rule` that doesn't finish.** Checks have no time limit, so neither does `try_rule`. The review shows the running command with its elapsed time and a **Stop** control; stopping kills it and returns `Stopped by the user after 4m12s.` as the tool's result, so the legislator can say what that means for the rule. Claude Code's MCP timeout has to be raised for this role (see [Launch: to verify](#launch-to-verify)).
 - **Discard** removes its worktree and any scratch worktree, and writes the usual line into an escalated task's Dialogue.
 
+## Publish
+
+*Design in progress, 2026-11-19. Replaces the "publish agent": publishing needs no agent.*
+
+- **A step with no agent** (decided 2026-11-19). How a project ships (merging dev into prod, opening a pull request, waiting for a deploy to propagate, tagging) is a fixed procedure, even if writing it down takes judgment. So publish is a mechanical step, like edit: code runs [publish rules](rules.md#publish-rules), which are commands, and the judgment (what kind of change this is, and when it ships) is yours.
+- **The kind is chosen when the root endeavor is created** (decided 2026-11-19). The picker lists the project's publish rules by description: Feature, Hotfix, Patch, or whatever the project defines, so Monteverdi keeps no fixed list. No agent reads the Dialogue for "this is a hotfix". The choice is stored in the root's frontmatter (`publish: <rule>`). Scaffolding gives a project one default rule, `feature`: sign off, then push `complete`.
+- **One rule is one whole procedure** (decided 2026-11-19), not one step: rules are unordered folders, and a procedure is an ordered list. Its steps let the UI show progress, wait for you, and retry from where it stopped.
+- **Two kinds of step** (decided 2026-11-19): `run`, a command code runs under the [command contract](rules.md#command-contract), with no time limit and a Stop control like a revision command (a step that waits, such as `gh pr checks --watch` or a script polling a deploy, is just a slow `run`); and `confirm`, which pauses with its text and a **Continue** control, for what a person does elsewhere (approving and merging a pull request).
+- **The procedures themselves are the project's** (decided 2026-11-19). What each step does, and what a kind such as "bundled into the next push" means (perhaps no steps at all, so the next procedure that pushes carries it), is written in the project's rules, not designed here.
+- **Credentials:** every step runs as your own process, so `git push` and `gh` use your credential helper and your login. No agent runs a step, and none ever sees a credential.
+- **A failing step stops the procedure** (decided 2026-11-19) and shows its output, with **Retry step**, **Skip step** and **Abort**. It doesn't become a fix task: a step works outside the endeavor branch, where no build session can help, so it goes to you.
+- **The legislator writes publish rules but can't try them** (decided 2026-11-19): `try_rule` on a step would push or deploy. The review shows the steps for you to read, with no runs.
+- **One press** (decided 2026-11-19). Sign off merges the endeavor into `complete` (Monteverdi's own step; nothing leaves your machine) and then runs its kind's procedure straight away. There's no separate Publish control: a project that wants to approve now and ship later starts its procedure with a `confirm` step ("Ship now?"), so the pause is the project's choice, written in its rule.
+- **One procedure at a time per project** (decided 2026-11-19): they push the same branches, so code runs them under a lock, like the merge lock. A procedure that stops at a failing step leaves the endeavor shown as signed off, with publishing stopped at that step.
+
+- **Every endeavor starts from `complete`, whatever its kind** (decided 2026-11-19; no `base` field). A procedure that ends by syncing its branches (dev and prod, say) keeps them equal at rest, but a hotfix carries whatever else is in `complete` and not yet shipped: a bundled patch, or a feature whose procedure is paused. That's approved work, and usually what you want. So the sign-off review **warns** instead: "Also ships: Patch X; Feature Y, paused at step 3", computed from the endeavors signed off whose procedure hasn't finished. A `base:` field on publish rules (a hotfix branched off prod) stays a future consideration. It would change decided mechanics: sign-off would merge the base in rather than `complete`, the rules-identical check compares against `complete`, and rule cherry-picks onto a branch off prod could conflict with its older code.
+- **The sign-off merge is always `git merge --no-ff`** (decided 2026-11-19), not a project choice. The endeavor has just merged `complete` in, so a plain merge would only fast-forward and leave no trace; `--no-ff` makes one merge commit per sign-off, so `git log --first-parent complete` reads as a timeline of sign-offs and rule changes. Squashing would drop the per-task commits from `complete` once the endeavor branch is deleted, and with them the `Monteverdi-Node:` trailers (the stale check, scoping's files from earlier builds), the pre-writeup commits `history` reads, and the committed task Dialogues. Code writes the message: `Sign off: <title>`, the root's summary, and a `Monteverdi-Endeavor: <root id>` trailer; authored by you. What the procedure does afterwards (squash-merging a pull request on GitHub, say) is the project's.
+
+### Publish: the sign-off review
+
+Decided 2026-11-19. The one place you judge a whole endeavor: each task was checked and reviewed alone, and no agent looks at the whole. Since Sign off also runs the procedure, the page answers "can I press, and what happens if I do?" before "is this right?". Everything on it is computed by code; there's no agent-written summary, which would only paraphrase the Answers and the commits.
+
+**Prepared on its own.** Once every node in the endeavor is built and current and nothing in it is being designed, scoped or built, code prepares sign-off without being asked (no tokens): merges `complete` into the endeavor branch, checks that `monteverdi/rules/` matches `complete`'s, and runs every edit rule and revision command in a clean worktree (see [Revision: sign-off](#revision-sign-off)). If `complete` moves before you press (another sign-off, an accepted rule change), code prepares again.
+
+**Top to bottom:**
+
+1. **What pressing does:** title, summary, the kind with its rule's steps listed, and the **also ships** warning when it applies. If Sign off isn't available, why, in one line ("Fix task running for typecheck", "Preparing: running checks (3 of 7)").
+2. **Checks:** each edit rule and revision command from the clean run, collapsed to one line when all passed. A failure without an override has already become a fix task; the page shows its status and links to it. A failure with an override shows *overridden in task 2: "flaky on Windows"* with its output and doesn't block: code can't tell whether it fails for the overridden reason or a new one, so the output lets you judge.
+3. **What was built:** the endeavor's design tree, each node with its summary and a link to its Answer; design changes (`monteverdi/`) listed apart from code.
+4. **Tasks:** one row per task, since each is one commit: subject, files, diff. Flagged on the row: edits outside its files, and any escalation with its outcome (guidance, override, rule change), linking the committed task Dialogue. Fix tasks from preparing are listed too.
+5. **The whole change:** the full diff against `complete`.
+6. **What came in:** the sign-offs and rule changes the merge-in brought from `complete`, so a surprising change in the diff has an explanation.
+
+**Controls:**
+
+- **Sign off:** merges and runs the procedure.
+- **Fix instead,** on an overridden failure: starts a fix task anyway.
+- **Request fix:** you describe something wrong that the checks missed; code makes it a fix task briefed with your words, the same mechanism as a failing check at sign-off.
+- **Opening a Dialogue on a node** from the tree, as anywhere, when the design is wrong rather than the code.
+
+**Left out:** revision notes from earlier rounds (they were about intermediate states, settled in the code), and token cost per task (it belongs on the endeavor's stats, not the go/no-go page). **Not yet:** keeping the clean worktree running so you can try the app before pressing. It would need a "start the app" command Monteverdi doesn't have; for now, check out the endeavor branch yourself.
+
 ## Vocabulary
 
 Decided:
@@ -549,7 +596,7 @@ Decided:
 - **Plan** means only the build plan, `<id>.build.md`. When a build finds a design decision wrong, that's "the Answer is wrong".
 - **Task ID:** `<id>.build.<n>`. "build" contains non-hex letters, so it can never clash with a node segment.
 - **Brief:** a briefing, not "short": everything an agent starts with. Code assembles the scoping session's; a build session's is its task entry in the plan plus the rules Monteverdi injects.
-- **One name per step**, shared by the step, its rules and its agent: **Dialogue** (Dialogue session), **scoping** (scoping session), **build** (build session), **edit** (no agent: checks after each edit, and again at revision), **revision** (the checks at `submit` and the revision session). See [rules.md](rules.md#five-types-of-rule).
+- **One name per step**, shared by the step, its rules and its agent: **Dialogue** (Dialogue session), **scoping** (scoping session), **build** (build session), **edit** (no agent: checks after each edit, and again at revision), **revision** (the checks at `submit` and the revision session), **publish** (no agent: the project's procedure after sign-off). See [rules.md](rules.md#six-types-of-rule).
 - **Process:** a separate `claude` run Monteverdi starts itself, with its own transcript and session ID. Build sessions are separate processes started by Monteverdi's code, never by the scoping session: each needs its own worktree and must be resumable on its own for the fix loop, which a subagent (living inside its parent) can't do.
 - **A task's files** (`files`, decided 2026-11-18; was `touches`): the files and glob patterns a task expects to create or edit. Plain, and what the plan file, the prompts and the code-change annotations already called it. Not `paths`, which rules use for the files a rule concerns: code compares the two, so they need different names.
 
@@ -586,4 +633,4 @@ Things about Claude Code's behaviour that the agent designs assume and that need
 ## Open
 
 - **Vocabulary pass** across all agents, together (in progress; see [Vocabulary](#vocabulary)).
-- **Publish agent:** not designed. Owns git that needs judgment about how a project ships: sign-off into `complete`, pushing, release cuts, hotfixes; rule commits that reached `complete` through Accept; overrides shown at sign-off.
+- **Publish:** designed as a mechanical step (see [Publish](#publish)). Still to do: draft publish rules into the legislator's fixed text and `write_rule` (`steps`); decide what a step's environment holds and where steps run; and design fix tasks at sign-off (their ID, brief, and what one from Request fix gets).

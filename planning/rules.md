@@ -20,7 +20,7 @@ In order of preference:
 
 And over time, push concerns up this list: when an agent rule keeps finding the same kind of problem, that's a sign it can become a script (see [Improving rules](#improving-rules)).
 
-## Five types of rule
+## Six types of rule
 
 Each type is named after its step, and the agent that runs the step shares the name (the Dialogue step and Dialogue session read Dialogue rules). **Each type belongs to exactly one agent or step**, so where a rule applies follows from its folder alone: no agent or setting decides it.
 
@@ -31,8 +31,9 @@ Each type is named after its step, and the agent that runs the step shares the n
 | [Build](#build-rules) | Build session | Injected at the head of its instructions | How code is written here |
 | [Edit](#edit-rules) | Build session's hook, then `submit` | After each matching edit, and again at `submit` | Fast mechanical checks |
 | [Revision](#revision-rules) | `submit`, then the revision session | At `submit` (commands and agent rules) and sign-off (commands) | Whether the result holds up: slower checks and judgment |
+| [Publish](#publish-rules) | Code (no agent) | After sign-off, the one rule the root endeavor's kind names | How the project ships: a procedure of commands and pauses |
 
-Dialogue, scoping and build rules are **guidance**: an agent reads them and follows them at its discretion. Edit and revision rules are **checks**: they run, and they decide. **What must happen can't be guidance**, so anything required belongs in edit or revision rules.
+Dialogue, scoping and build rules are **guidance**: an agent reads them and follows them at its discretion. Edit and revision rules are **checks**: they run, and they decide. **What must happen can't be guidance**, so anything required belongs in edit or revision rules. Publish rules are neither: they're **procedures**, commands code runs in order (decided 2026-11-19).
 
 At `submit`, edit rules run before revision rules: they're cheap, and a revision session shouldn't spend tokens judging code that doesn't typecheck.
 
@@ -70,7 +71,7 @@ Being skills, the same rules also work as ordinary skills in your own Claude Cod
 
 **How many rules is up to you.** Dialogue and scoping rules are all injected, and every injected rule costs context on every call; edit rules all run after matching edits. Monteverdi doesn't limit them. If sessions get slow or expensive, remove or shorten rules.
 
-**Personal rules** live in `~/.monteverdi/rules/<type>/` (same five folders, same format) and apply to every project. Monteverdi reads both locations; when a personal rule and a project rule of the same type share a name, the project's wins. Personal rules aren't in the repo, so anyone else on the project doesn't get them; to keep history honest, each verdict records the rule's source (`project` or `personal`). The UI shows where a personal rule is shadowed by a project rule of the same name, so a collision is never silent.
+**Personal rules** live in `~/.monteverdi/rules/<type>/` (same folders, same format) and apply to every project. Monteverdi reads both locations; when a personal rule and a project rule of the same type share a name, the project's wins. Personal rules aren't in the repo, so anyone else on the project doesn't get them; to keep history honest, each verdict records the rule's source (`project` or `personal`). The UI shows where a personal rule is shadowed by a project rule of the same name, so a collision is never silent.
 
 **Your working style is a personal rule.** There's no separate editable base prompt: each agent's instructions are Monteverdi's fixed layer (code) followed by its rules, and how you like to work goes in a personal rule of that step's type, e.g. `~/.monteverdi/rules/dialogue/my-style/`. Only Dialogue and scoping take a style; build sessions follow build rules once you press Build plan, and revision is checks, not style.
 
@@ -240,6 +241,30 @@ What Monteverdi gives a command (an edit rule, or a revision rule with `kind: co
 
 An edit script has to work in both places: one file after an edit, every changed file at `submit`.
 
+## Publish rules
+
+Decided 2026-11-19 (design in progress; see [agents.md](agents.md#publish)). How the project ships. **One rule is one procedure, one kind of change**; you pick the kind when you create a root endeavor, from the rules' descriptions, and code runs that rule's steps after sign-off. No agent reads them.
+
+```markdown
+---
+name: feature
+description: A new feature, shipped through dev to prod.
+steps:
+  - run: git push origin complete:dev
+  - run: gh pr create --base prod --head dev --title "$MONTEVERDI_TITLE" --body "$MONTEVERDI_SUMMARY"
+  - confirm: Get the PR approved and merged.
+  - run: ./scripts/wait-for-propagation.sh
+  - run: git fetch origin && git merge --no-ff origin/prod
+---
+```
+
+- **`run`** is a command under the [command contract](#command-contract): exit 0 continues, anything else stops the procedure with its output, and you choose Retry step, Skip step or Abort. No time limit; a Stop control. A step that waits (CI, a deploy propagating) is a slow `run`.
+- **`confirm`** pauses with its text until you press Continue: for what a person does elsewhere. Sign off runs the procedure straight away, so a project that wants to sign off now and ship later starts with a `confirm` step.
+- **The procedure is the project's.** What each kind does is written here, not designed into Monteverdi; a kind with no steps just signs off, and the next procedure that pushes carries it.
+- **Scaffolded default:** one rule, `feature`, that pushes `complete`.
+- **Runs as you,** so git and `gh` use your own credentials. Never tried by the legislator: a trial would push.
+- To design: what the environment holds beyond the command contract (`MONTEVERDI_TITLE` and `MONTEVERDI_SUMMARY` above are placeholders), and where steps run.
+
 ## When rules run
 
 | Event | What runs |
@@ -251,7 +276,7 @@ An edit script has to work in both places: one file after an edit, every changed
 | `submit` (task → endeavor branch) | **Every selected edit and revision rule.** This is where code stops being built and has to work, because other tasks build on the endeavor branch. |
 | Merge (task → endeavor branch, under the merge lock) | If the branch moved since `submit`: the task's edit rules and revision commands again, on the re-applied commit |
 | Sign-off (endeavor → `complete`) | Every edit rule and revision command again, on the merged result in a clean worktree, before you approve. Not agent rules |
-| Push | After sign-off |
+| Publish | After sign-off: the steps of the publish rule the root endeavor's kind names |
 
 ## When revision fails
 
