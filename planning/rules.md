@@ -242,8 +242,6 @@ An edit script has to work in both places: one file after an edit, every changed
 | Scoping session starts | Scoping rules, injected |
 | Build session starts | Its chosen build rules, injected |
 | An edit in a build session | Edit rules whose `paths` match the edited file |
-| add / commit on a task branch | Nothing (optionally a formatter, if it takes seconds). Commits are the build session's private checkpoints. |
-| `check` (on demand) | Edit rules and revision commands, at the station |
 | `submit` (task → endeavor branch) | **Every selected edit and revision rule.** This is where code stops being built and has to work, because other tasks build on the endeavor branch. |
 | Sign-off (endeavor → `complete`) | Every edit and revision rule again, on the merged result, before you approve |
 | Push | After sign-off |

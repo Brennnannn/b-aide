@@ -71,7 +71,7 @@ Monteverdi starts every agent itself. No agent starts another agent to do Montev
 | **Reuse** | Existing code to use, as `{path, use}` entries: components, helpers, types. Finding these is the scoping session's job, so the build session doesn't build what already exists |
 | Done | What to check before `submit`: observable results, including what later tasks rely on |
 
-Answers are linked, not copied; the build session reads them with `breadcrumb`. Each prose field holds only what the scoping session knows and the Answers don't, so there's no second, paraphrased source of truth to drift. **No out-of-scope field** (decided 2026-11-18): other tasks' nodes are known to code, which renders "Other tasks build: …" under each task, and `files` already says where a task works.
+Answers are linked, not copied; code pastes them into the build session's first message (see [Build session: first message](#build-session-first-message)). Each prose field holds only what the scoping session knows and the Answers don't, so there's no second, paraphrased source of truth to drift. **No out-of-scope field** (decided 2026-11-18): other tasks' nodes are known to code, which renders "Other tasks build: …" under each task, and `files` already says where a task works.
 
 Two fields belong to the plan rather than a task: **Approach** (one to three sentences for you on how the work was split) and, on a revision, an optional **response**: what changed in reply to your feedback and, above all, what the session declined and why. Your feedback goes in through the session's message; `response` comes out through `submit_plan`, and code writes it under your feedback in the Versions block, so each round reads as feedback, then reply. Code shows what changed between plan versions alongside it.
 
@@ -254,16 +254,86 @@ Not planned; noted in case it's ever wanted.
 - **Node size.** Whether a node is too large for one build session isn't judged by any agent today. Once build sessions log their context size and outcome, a measured threshold could become a project setting passed to the scoping session, or a warning in the UI before Plan build.
 ## Build session
 
+*Detailed design 2026-11-18 to 2026-11-19. Drafts: fixed text `server/prompts/build.md` (after the shared block `shared.md`), first message `build.first-message.md`, tools `tools.md`.*
+
 - **Purpose:** builds one task from the build plan.
 - **Starts:** when Monteverdi reaches its task in the plan and its dependencies are built.
 - **Runs in:** its own task worktree and branch. Always a fresh session.
-- **Reads:** its entry in `<id>.build.md`, which code passes verbatim in its first message, the design nodes it links to, and the build rules Monteverdi injected into its instructions.
-- **Writes:** code, committed on its task branch, with a `Monteverdi-Node: <id>` trailer per node it builds.
-- **Tools:** `check` while working, `submit` when done, `reopen` when an Answer turns out to be wrong.
-- **On conflicts:** rebases onto the endeavor branch and resolves them itself, since it knows what its changes are for.
+- **Reads:** its entry in `<id>.build.md` and its nodes with their ancestors, both pasted by code into its first message (below), and the build rules Monteverdi injected into its instructions.
+- **Writes:** code, in its worktree. Monteverdi does the git: checkpoints, one commit per task with a `Monteverdi-Node: <id>` trailer per node, and the rebase (see [git and tools](#build-session-git-and-tools)).
+- **Tools:** `submit` when done (it runs the mechanical checks first), `reopen` when an Answer turns out to be wrong or the build is stuck, `reply` in an escalation Dialogue.
+- **On conflicts:** resolves the conflict markers code leaves when its task doesn't apply cleanly to the endeavor branch, since it knows what its changes are for.
 - **During the build:** gets feedback from [edit rules](rules.md#edit-rules) after each matching edit, and keeps working.
 - **On escalation:** joins a task Dialogue with you when its fix loop doesn't converge (see [rules.md](rules.md#when-revision-fails)).
 - **Ends:** when its task merges, or when it calls `reopen` and pauses.
+
+### Build session: first message
+
+Decided 2026-11-19. Code knows the session will always need its nodes, so it pastes them rather than leaving the session to call `breadcrumb`: the cost difference is small (a few thousand token-equivalents per task), but a pasted Answer can't be skipped, while a session handed a task entry whose Goal reads like a complete brief might start coding without reading one. Same pattern as scoping's subtree and Dialogue's breadcrumb. In order:
+
+1. **Header:** the task ID, the worktree path (`Read` takes absolute paths and our system text replaces the prompt that used to give the working folder), the task branch, the endeavor branch and the commit the task branched from.
+2. **The task entry**, verbatim from `<id>.build.md`.
+3. **Its nodes as one tree:** each node it builds in full (explanation, Answer, status line); each ancestor once, explanation only, since ancestors are sectioned and their explanations hold what was decided for the whole. Siblings other tasks build are left out; "Other tasks build" marks that boundary. A **stale** node adds its Answer's diff since its build commit and the files that build changed, so the session changes existing code rather than building from scratch. **Dependencies are inline**, under the node that depends on them, as in scoping's subtree: each `Depends on:` target outside the task (always built by the time the task starts, whether an outside node or an earlier task of this build) with its summary and the files its build changed. One place per fact; `breadcrumb` gives a dependency's full Answer.
+4. **The instruction**, last.
+
+**No list of checks** (decided 2026-11-19). The edit and revision rules a task will meet aren't listed up front. Their guidance already reaches the session through build rules, and the session should build with its mind on the outcome; edit-rule feedback after each edit and the mechanical checks `submit` runs bring the checks in as it goes. The fix loop adds optional parts to this template (see the fixed text's design).
+
+### Build session: configuration
+
+In progress, 2026-11-19. Settled so far:
+
+| | |
+|---|---|
+| Working folder | The task worktree |
+| Built-in tools | `--tools "Bash,Read,Edit,Write,Grep,Glob"`: it writes code and runs commands. No Agent, no web tools (a rule can declare `WebFetch`), no to-do tool (the task entry is its plan) |
+| Permissions | All of Bash allowed (`--allowedTools "Bash,Read,Edit,Write,Grep,Glob,mcp__monteverdi__*"` plus its rules' servers). A headless run can't answer a prompt, and patterns can't list every command a build needs. No deny list or sandbox: a session told to build just builds. **Backstop in code:** before and after each run, code records the endeavor branch and every other task branch, and fails the run if any of them moved (worktrees share the main repo's `.git`, so a session could move one) |
+| CLAUDE.md | Loaded. It's written for exactly this kind of work, and leaving it out would need a new mechanism to bring it back. The fixed text's closing line says Monteverdi's instructions win where it conflicts |
+| MCP | Monteverdi's server (role `build`: `breadcrumb`, `submit`, `reopen`, `reply`) plus its rules' servers, `--strict-mcp-config` |
+| Skills, commands | None (`--disable-slash-commands`); chosen skills are injected as rules |
+| Model | Opus 5.5, effort `medium`. Building is where most tokens go, so it's the first place to measure whether a smaller model does as well |
+| Run folder | `~/.monteverdi/runs/<session-id>/`, `--add-dir`ed: system text, MCP config, settings, and long station output for the session to `Read` |
+| Session ID, output | `--session-id` chosen by code (the fix loop resumes it), `--output-format stream-json` |
+| Turn limit | `40 + 20 × nodes`, capped at 150, per run; a fix-loop resume gets 40. A backstop, tuned from logged usage |
+| Compaction | Off. Claude Code's automatic compaction summarizes the conversation near the context limit, and summaries are weakest at what a build session leans on: which files it touched and how. The worktree is an exact record instead (below) |
+| Closing line | "Build this task, then submit it." `submit` succeeding is the end; revisit if code takes over git |
+
+**Running out.** A session doesn't see its own token count or turn count, so it can't wind down before a limit; the run just ends, and code decides what follows. Its edits are on disk in the worktree either way, committed or not.
+
+| Limit | Then |
+|---|---|
+| Context full (the API refuses the next call) | Code starts one fresh session automatically: the same first message plus an optional part saying a previous session ran out of context, with the commits on the branch and the uncommitted changes since the base commit. It loses the old session's reasoning and what it had verified, not its work. If that one runs out too, the run fails to the UI |
+| Turn limit | The run fails to the UI with a Retry button, which resumes the same session (its context is still usable) with a fresh count |
+
+**Edit rules attach through one hook** (decided 2026-11-19). Claude Code runs hooks itself, outside the model, so they cost no context; the model sees only what a failing one prints. Code writes a `settings.json` into the run folder (passed with `--settings`; your own hooks are kept out with `--setting-sources`, to verify) holding one PostToolUse hook on `Edit|Write` that calls Monteverdi. Monteverdi reads which file was edited, picks the edit rules whose `paths` match (hook matchers can filter only by tool name, not by file), runs them with the [command contract](rules.md#command-contract)'s environment, and on any failure prints their combined output and exits 2, which Claude Code shows to the model. Rule scripts stay identical at both places they run, and path matching lives in code. The same hook re-runs the setup command when the edited file is the manifest or lockfile. Edits made through Bash don't trigger it; the station re-runs every edit rule anyway.
+
+### Build session: git and tools
+
+Decided 2026-11-19. Full descriptions, checks and error wording in `server/prompts/tools.md`.
+
+**Code does a task's git.** The build session edits files and leaves git to Monteverdi; it may still run `git diff` or `git log` to look. Every step of a task's git is mechanical, so code does it and no trailer can be forgotten. On `submit`, code commits the worktree on the task branch and puts the task's changes onto the endeavor branch's tip as **one commit per task**, with a `Monteverdi-Node:` trailer per node and the co-author trailers. One commit per task keeps the node history clean and makes a task easy to revert or cherry-pick. If that conflicts (rare, since tasks with overlapping `files` run one after another), code leaves the conflict markers in the worktree and `submit`'s result names the files and the task that changed them; the session resolves them and submits again. Git that needs judgment about how a project ships (release cuts, hotfixes, pushing) belongs to the publish agent, whose design is still to come.
+
+**The session writes the commit message**, as `submit`'s `message`: a subject and an optional body, following whatever conventions CLAUDE.md or its build rules set, since code can't know them and publishing may read history. Code appends the trailers.
+
+**Its tools:** `submit`, `reopen`, `reply`, `breadcrumb`. No `check` (dropped 2026-11-19): `submit` runs the mechanical checks itself, and mid-build the session runs quick commands (a typecheck, one test file) in Bash, since its worktree has the project's environment (see [Running the app](#build-session-running-the-app)).
+
+**`submit` runs the mechanical checks first**, so the second wave (build toward the outcome, then fix what the checks find) happens without the fixed text asking for it. Code commits, applies the task onto the endeavor branch's tip, and the station runs the edit rules and revision commands selected by the changed files while the call waits, queue included. Failures come back as the tool's result: the passing rules named in one line, each failure's rule, kind and trimmed output, with the full output in the run folder and its path. The session keeps working in the same run and submits again. Once they pass, the task is queued for the agent revision rules and the session ends its turn. Errors: nothing changed since the base commit; files under `monteverdi/` changed (revert them, and `reopen` if the design is wrong); conflict markers left in a file; a conflict; a `reopen` earlier in the run; already queued.
+
+**One way back in.** A build session is brought back later in several situations: the revision session's notes after `submit`, your turns in an escalation Dialogue, Answers settled after its `reopen`, a Retry after the turn limit. All of them go through one path: code resumes the session with a message (`claude -p --resume <id>`) if it's warm or small, and otherwise starts a fresh session from the worktree, with the first message plus an optional part for what's new. Running out of context always takes the fresh route. So `submit` doesn't wait for the agent revision rules: that wait can be long (the queue, then a whole revision session), and blocking through it would need a raised MCP timeout, a live process per waiting task, and recovery when Monteverdi restarts mid-wait, which would use the resume path anyway. The mechanical checks are quick enough to wait for.
+
+**`reopen` on a node pauses the task.** Its work stays in the worktree, tasks waiting on it wait too, and `submit` is refused for the rest of the run. Code records the commit the task's Answers came from. Once every node it reopened is solved again, code compares, mechanically:
+
+- **Only Answers changed** (its nodes' or their dependencies'): the task comes back with each changed Answer's diff and the files changed so far, and reworks what they affect.
+- **The structure changed** (a node of the task was deleted or gained children): the task no longer matches its plan, so code cancels it and the subtree goes back to Plan build, which revises a plan whose build was cancelled.
+
+The session needn't anticipate rework while building; it's told exactly what changed when it comes back.
+
+**Asking for help is `reopen` with the task's ID.** `reopen("checkout.4f1a2.b7d05.build.1", reason)` opens the task's Dialogue (`<task-id>.dialogue.md`), just as a node's ID opens the node's: one tool for "this needs the user", where a node ID means the design is wrong and the task's ID means the build is stuck (a rule that seems wrong for this case, a revision note it disagrees with, a check failing for reasons outside its code, a conflict it can't resolve). Code also escalates on its own when the same rule fails 3 times (see [rules.md](rules.md#when-revision-fails)).
+
+**`reply` is listed from the start**, refused unless the task's Dialogue is open: tools can't be added mid-session without breaking the cache. In the escalation Dialogue the session posts its turns with `reply`, and each of your turns comes back through the one path. Once you've given guidance, it builds and submits again.
+
+### Build session: running the app
+
+Decided 2026-11-19. **Task worktrees get the project's environment**, like the station: a copy of the project folder's `.env` (re-copied when it changes) and a port of their own in `$PORT`. A build session can then run the project's commands and start the dev server itself (a build rule says how), and look at its page with a browser its rules bring, while it builds. Otherwise it would build UI blind and every visual mistake would cost a trip through the station: the queue, a whole revision session and a resume. Resources the worktrees share, such as one dev database that a migration in one task and tests in another both touch, are the project's to handle (a build rule, or a setup command that creates a database per worktree); Monteverdi can't know how a project's data works.
 
 ## Revision session
 

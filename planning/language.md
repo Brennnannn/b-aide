@@ -152,7 +152,7 @@ Refunds go through Stripe's Refund API, keyed by the original PaymentIntent. ...
   2. **Writeup:** the session condenses the Dialogue into the Answer and deletes the dialogue file; Monteverdi commits that. You review it like any other change.
 
   The full conversation is always the version just before the writeup commit, so the `history` tool (see [Agent tools](#agent-tools)) can return it when a session wants to know how a decision was reached.
-- **Who commits:** Dialogue sessions never commit. They share the endeavor worktree, so Monteverdi makes every planning commit there. Between condensings the dialogue file is simply uncommitted on disk. (Build sessions commit normally, on their own task branches.)
+- **Who commits:** Dialogue sessions never commit. They share the endeavor worktree, so Monteverdi makes every planning commit there. Between condensings the dialogue file is simply uncommitted on disk. (Build sessions don't commit either: Monteverdi commits each task on `submit`; see [agents.md](agents.md#build-session-git-and-tools).)
 - **Solution → Sections:** when a Dialogue shows the endeavor has several parts, the session shapes the children with three tools, `create_child`, `update_child` and `delete_child`, which write immediately (uncommitted, like the dialogue file). Then `finalize_sections` condenses what was decided for the whole into the endeavor's explanation and closes the Dialogue with the same two commits. What was decided about one child goes in that child's explanation. What's still open about one child becomes its **seed**: an opening Claude turn in that child's new Dialogue that sets out where the discussion stands, so the open question turns up where you'll pick it up. A seed summarizes; it never moves your turns, which code couldn't verify, and the full parent conversation stays reachable with `history`. A node has a Solution *or* Sections, so the parent's Dialogue is always condensed before the switch.
 - **Rearranging Sections:** a Dialogue can also open on a sectioned node, about the split itself; replying after `finalize_sections` opens one. Merging, re-scoping, deleting or adding children is judgment, so there's no mechanism per case: the session uses the same three child tools and finalizes with `finalize_sections`. Deleting a built child removes the node, not its code; what happens to that code is part of the parent's judgment, written into a child's explanation (e.g. a replacement that removes it). A child whose Answer a change invalidates gets `reopen`. Purely mechanical changes (reorder, rename, add an empty child) are UI actions with no session.
 - **Reopening:** adding a Dialogue to a solved Solution reopens it. The session stays open after finalizing, so if you object ("wait a second!") it simply replies, which reopens the node. Solved and reopened are never flags; they follow from whether the node has an Answer and a dialogue file.
@@ -171,12 +171,11 @@ Monteverdi runs an MCP server, a thin layer over its local `/api`, and attaches 
 | Tool | Does |
 |---|---|
 | `breadcrumb` | The target node in full plus its ancestors' bodies up to the root |
-| `check` | Run the edit rules and revision commands on the current commit at the test station; report back, no merge |
-| `submit` | Rebase, run every rule, merge if all pass (see [Merging a task](#merging-a-task)) |
-| `reopen` | Open a Dialogue on a node and pause |
+| `submit` | Build session only: commit and rebase the task, run the mechanical rules while the session waits, then queue it for the agent rules and merge if all pass (see [Merging a task](#merging-a-task)) |
+| `reopen` | Open a Dialogue on a node and pause; with a task's ID, a build session asks for help in the task's Dialogue |
 | `submit_plan` | Scoping session only: validate a build plan and, if valid, render `<id>.build.md` (see [agents.md](agents.md#scoping-session)) |
 | `history` | A node's full Dialogue from its last pre-writeup commit |
-| `reply` | Dialogue session only: post its turn (message, Findings); code writes it into the dialogue file |
+| `reply` | Post a turn (message, Findings) in a Dialogue; code writes it into the dialogue file. Dialogue sessions, and build sessions in their task's Dialogue |
 | `finalize_answer` | Dialogue session only, on finalize: the Answer; code writes it into the node and deletes the dialogue file |
 | `create_child` | Dialogue session only: a new child (title, explanation, optional `depends_on` and seed); code assigns the ID and writes it |
 | `update_child` | Dialogue session only: change a child's title, explanation or `depends_on`; its ID stays |
@@ -212,12 +211,12 @@ complete                          ← you sign off on merges into this branch
 
 ### Merging a task
 
-1. The build session finishes, calls `submit`, and rebases its task branch onto the endeavor branch's tip, resolving conflicts itself (it knows what its changes are for).
-2. The **test station** checks out the rebased commit and runs every [rule](#rules). The station is one worktree per endeavor, set up once with a copy of the project folder's `.env` (git doesn't track it, so no worktree gets it on its own; Monteverdi re-copies it when it changes) and its own port, so task worktrees don't each need those. Like every worktree, it gets dependencies through [worktree setup](#worktree-setup).
+1. The build session finishes and calls `submit`. Monteverdi commits the worktree and puts the task onto the endeavor branch's tip as one commit; on a conflict it leaves the markers for the build session to resolve (it knows what its changes are for), and the session submits again.
+2. The **test station** checks out the rebased commit and runs every [rule](#rules). The station is one worktree per endeavor, set up once with a copy of the project folder's `.env` (git doesn't track it, so no worktree gets it on its own; Monteverdi re-copies it when it changes) and its own port. Task worktrees get the same (decided 2026-11-19), so build sessions can run the project's commands and dev server while they build (see [agents.md](agents.md#build-session-running-the-app)). Like every worktree, it gets dependencies through [worktree setup](#worktree-setup).
 3. A rule fails → back to the build session in its task worktree with the failure, then repeat from step 1. If the loop doesn't converge, it escalates to a Dialogue attached to the task, between you and the build session (see [rules.md](rules.md#when-revision-fails)).
 4. Every rule passes → the endeavor branch fast-forwards to the commit. There's no per-task human review; your sign-off happens once, on the root's merge into `complete`.
 
-Submitted tasks queue for the station and merge one at a time, so each rebase is against a branch that isn't moving. `check` requests share the same station and take turns with the queue; an endeavor can get a second station later if the wait gets long.
+Submitted tasks queue for the station and merge one at a time, so each rebase is against a branch that isn't moving. An endeavor can get a second station later if the wait gets long.
 
 ### Rules
 
@@ -225,7 +224,7 @@ The station runs the project's **edit and revision rules** (in `monteverdi/rules
 
 1. The station's code selects rules by the files the change touched; no model decides which run.
 2. **Edit rules** run first. The build session already ran them after each edit; the station runs them again, because the build step is never trusted.
-3. **Revision commands** run next, because they're cheap: `tsc`, lint, tests, or the project's own scripts. `check` runs only steps 2 and 3.
+3. **Revision commands** run next, because they're cheap: `tsc`, lint, tests, or the project's own scripts. `submit` runs these two steps while the build session waits, and returns their failures to it directly.
 4. **Agent revision rules** run last: a fresh **revision session** carries them out and must return a verdict for each rule by name.
 
 On failure:
@@ -242,7 +241,7 @@ On failure:
 - **The plan is a file**, `<id>.build.md`, rendered by Monteverdi from what the scoping session submits: tasks, order, the node IDs each task builds, the files each touches. You can review it before any code is written. "Plan" always means this file.
 - **Task IDs** are `<id>.build.<n>` (e.g. `checkout.4f1a2.build.1`); "build" has non-hex letters, so it never clashes with a node segment.
 - **Dependencies:** see [Dependencies](#dependencies).
-- **Build commits carry a trailer**, `Monteverdi-Node: <id>`, one per node built. A rebase keeps the commit message, so the trailer survives step 1 above. A node is **built** when such a commit is on the endeavor branch, which in this flow means it passed the test station. It's **stale** when its Answer changed after that commit.
+- **Build commits carry a trailer**, `Monteverdi-Node: <id>`, one per node built, written by Monteverdi when it commits the task (step 1 above). A node is **built** when such a commit is on the endeavor branch, which in this flow means it passed the test station. It's **stale** when its Answer changed after that commit.
 - **When building shows an Answer is wrong**, the build session doesn't improvise: it opens a Dialogue on that node (making it reopened) and pauses until the Answer is updated.
 
 ### Dependencies
