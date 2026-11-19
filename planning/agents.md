@@ -331,6 +331,17 @@ The session needn't anticipate rework while building; it's told exactly what cha
 
 **`reply` is listed from the start**, refused unless the task's Dialogue is open: tools can't be added mid-session without breaking the cache. In the escalation Dialogue the session posts its turns with `reply`, and each of your turns comes back through the one path. Once you've given guidance, it builds and submits again.
 
+### Build session: escalation
+
+Decided 2026-11-19. A task's Dialogue (`<task-id>.dialogue.md`, next to the plan file) opens when the build session calls `reopen` with its task's ID, whose `reason` is the opening turn, or when code escalates on its own because the same rule failed 3 times (see [rules.md](rules.md#when-revision-fails)).
+
+- **The opening turn, when code escalates:** the build session has just submitted, so it's warm. Code resumes it once to write the opening turn with `reply` (what keeps failing, what it tried, what it thinks the cause is, what it needs from you), and appends each attempt's output below it in a collapsed block. You read its explanation first, with the raw output underneath, the same shape as when it asks for help itself.
+- **A one-time override is a control in the task's Dialogue**, never a tool: only you can grant one. You name the rule and a reason; code records it in the task's state, the station counts that rule as passed on the next `submit`, and code adds `Monteverdi-Override: <rule> (<reason>)` to the task's commit. The build session hears of it in its next message, and may suggest an override in a `reply` but can't grant one. At sign-off the rule runs again on the merged result and fails again; sign-off should show it as overridden, with the task and reason, rather than block (for the publishing design).
+- **An environment fix needs no mechanism of its own.** Once the station or a flaky test is fixed, you say so in the Dialogue ("fixed the test, try again"); the session comes back through the one path and submits its work unchanged.
+- **After the task merges**, code commits the task's Dialogue once and then deletes the file, like a node's Dialogue at writeup: the conversation stays in git history, and nothing needs condensing, since the outcome is in the code and, for an override, in the trailer.
+
+A rule change goes to the session that edits rules (designed with editing); a design change is `reopen` on the node, which the build session can call from inside the Dialogue.
+
 ### Build session: running the app
 
 Decided 2026-11-19. **Task worktrees get the project's environment**, like the station: a copy of the project folder's `.env` (re-copied when it changes) and a port of their own in `$PORT`. A build session can then run the project's commands and start the dev server itself (a build rule says how), and look at its page with a browser its rules bring, while it builds. Otherwise it would build UI blind and every visual mistake would cost a trip through the station: the queue, a whole revision session and a resume. Resources the worktrees share, such as one dev database that a migration in one task and tests in another both touch, are the project's to handle (a build rule, or a setup command that creates a database per worktree); Monteverdi can't know how a project's data works.
@@ -367,6 +378,13 @@ Things about Claude Code's behaviour that the agent designs assume and that need
 - **`${VAR}` in a `--mcp-config` file.** Claude Code expands `${VAR}` in `.mcp.json` from the environment; confirm it does the same in a file passed with `--mcp-config`, so secrets can stay in the session's environment (from the project's `.env`) rather than be written into the run folder. If it doesn't, code substitutes them into the run's config file, which is outside the repo.
 - **A `tools:` key in a skill's frontmatter.** Confirm Claude Code ignores a key it doesn't know, so adding one for Monteverdi doesn't break the skill in your own sessions.
 - **User-scope MCP servers.** A personal rule may name one of your own servers rather than one in `.mcp.json`. They live in Claude Code's own config; find a stable way to read one's definition (`claude mcp get <name>`, say) or fall back to `.mcp.json` only.
+- **Build sessions** (noted 2026-11-19):
+  - **Our settings file.** That `--settings <run folder>/settings.json` loads the edit-rule hook, and that `--setting-sources` keeps your own hooks and settings out while still applying ours.
+  - **The hook's feedback.** That a PostToolUse hook exiting 2 shows its stderr to the model after `Edit` and `Write`, as the edit-rule design assumes.
+  - **Turning compaction off** in a headless run: find the setting or environment variable, and confirm none happens.
+  - **Context full.** What a refused call looks like in `stream-json` output, so code can tell it apart from other errors and start the fresh session.
+  - **The MCP timeout.** That a tool call can wait as long as `submit`'s checks take, queue included; if not, raise Claude Code's MCP timeout for build sessions.
+  - **Resuming headless.** That `claude -p --resume <id> "<message>"` with the same flags continues the session with its cache intact, and that `--max-turns` counts per run.
 - **The MCP schema check.** Confirm what a shape error (missing field, wrong type) looks like to the model, so our own errors can match its tone.
 
 ## Open

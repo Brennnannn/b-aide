@@ -250,17 +250,17 @@ An edit script has to work in both places: one file after an edit, every changed
 
 1. **Fix loop (automatic).** A failed rule's output or the revision session's notes go back to the same build session, resumed with its context. It fixes the problem and submits again. Most failures end here.
 2. **The Answer is wrong.** If the revision session or the build session concludes the Answer itself is wrong, it calls `reopen` and the problem goes to a Dialogue on the design node.
-3. **Escalation.** When the loop isn't converging (the same rule fails 3 times, a setting, or the build session says it's stuck), Monteverdi opens a **Dialogue attached to the build task**: `<task-id>.dialogue.md` (task IDs are `<id>.build.<n>`), with the same turns, Findings block, and warm-resume / cold-fresh rules as any Dialogue. The participants are you and the build session itself, resumed, since it knows what it tried. Monteverdi seeds it with every attempt's verdicts and command output.
+3. **Escalation.** When the loop isn't converging (the same rule fails 3 times, a setting, or the build session says it's stuck), Monteverdi opens a **Dialogue attached to the build task**: `<task-id>.dialogue.md` (task IDs are `<id>.build.<n>`), with the same turns, Findings block, and warm-resume / cold-fresh rules as any Dialogue. The participants are you and the build session itself, resumed, since it knows what it tried. When code escalates, the build session writes the opening turn (what keeps failing, what it tried, what it needs), with every attempt's verdicts and command output appended; see [agents.md](agents.md#build-session-escalation).
 
 Typical causes for escalation: the build and revision sessions disagree, a rule seems wrong for this case, a flaky test, a broken test station, a conflict the session can't resolve.
 
 | Outcome | What happens |
 |---|---|
 | Guidance | "Do it this way." The build session continues and resubmits. |
-| One-time override | You accept the failure for this change. Recorded as a commit trailer: `Monteverdi-Override: color-tokens (reason)`. **Only you can grant this, never an agent.** |
+| One-time override | You accept the failure for this change. A control in the task's Dialogue; code records it as a commit trailer: `Monteverdi-Override: color-tokens (reason)`. **Only you can grant this, never an agent.** |
 | Rule change | The rule is wrong in general. A short session edits it; you review the change. |
 | Design change | It's a design problem: `reopen` on the node. |
-| Environment fix | The station or flaky test gets fixed; the task resubmits unchanged. |
+| Environment fix | The station or flaky test gets fixed and you say so in the Dialogue; the build session submits its work unchanged. |
 
 **At sign-off**, a failure on the merged result is usually an integration problem no single task owns. Monteverdi creates a small fix task on the endeavor branch (an ordinary build session, briefed with the failure); if that fails too, it escalates the same way.
 

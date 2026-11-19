@@ -118,6 +118,15 @@ has N problems; fix them and submit the whole plan again:`
 
 **Result on success:** `Plan submitted. End your turn.`
 
+# reply (build)
+
+Dialogue's `reply` is still to draft here; build sessions get the same tool, listed from the
+start (adding a tool mid-session would break the cache) and refused until the task's Dialogue
+is open. The description adds, for build: `Only while your task's Dialogue is open.`
+
+**Error (build, no task Dialogue open):** `reply is for your task's Dialogue, and none is open.
+To ask the user for help, call reopen with your task's ID, checkout.4f1a2.b7d05.build.1.`
+
 # submit
 
 Build only.

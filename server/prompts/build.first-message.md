@@ -72,3 +72,10 @@ Rework what the changed Answers affect, keep the rest, then submit.
 Reply to {name}'s last turn with `reply`, and act on what they've decided.
 <!-- 6e. Ran out of context, or a Retry after the turn limit. -->
 Carry on with this task from where the work stands, then submit it.
+<!-- 6f. Code escalated (the same rule failed 3 times). Warm: the session just submitted.
+     Code appends each attempt's output to the turn it writes. -->
+{rule} has failed {count} times, so Monteverdi has opened this task's Dialogue with {name}.
+Write its opening turn with `reply`: what keeps failing, what you've tried, what you think
+the cause is, and what you need from {name}. Then end your turn.
+<!-- 6g. The user granted an override in the task's Dialogue (with 6d if they also wrote). -->
+{name} overrode {rule} for this task: {reason}. Submit again; that rule now counts as passed.
