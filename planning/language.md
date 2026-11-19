@@ -171,7 +171,7 @@ Monteverdi runs an MCP server, a thin layer over its local `/api`, and attaches 
 | Tool | Does |
 |---|---|
 | `breadcrumb` | The target node in full plus its ancestors' bodies up to the root |
-| `submit` | Build session only: commit and rebase the task, run the mechanical rules while the session waits, then queue it for the agent rules and merge if all pass (see [Merging a task](#merging-a-task)) |
+| `submit` | Build session only: commit and apply the task in its worktree, run the mechanical rules while the session waits, then hand it to review and merge if all pass (see [Merging a task](#merging-a-task)) |
 | `reopen` | Open a Dialogue on a node and pause; with a task's ID, a build session asks for help in the task's Dialogue |
 | `submit_plan` | Scoping session only: validate a build plan and, if valid, render `<id>.build.md` (see [agents.md](agents.md#scoping-session)) |
 | `history` | A node's full Dialogue from its last pre-writeup commit |
@@ -181,7 +181,7 @@ Monteverdi runs an MCP server, a thin layer over its local `/api`, and attaches 
 | `update_child` | Dialogue session only: change a child's title, explanation or `depends_on`; its ID stays |
 | `delete_child` | Dialogue session only: delete a child and its subtree, with a reason |
 | `finalize_sections` | Dialogue session only, on finalize: the endeavor's revised explanation and optional `depends_on`; code writes it, deletes the dialogue file and makes the two commits |
-| `verdict` | Revision session only: pass or fail for one revision rule, with notes and an optional rule suggestion (see [rules.md](rules.md#how-agent-rules-are-enforced)) |
+| `verdict` | Revision session only: pass or fail for one revision rule, with the problems found and an optional rule suggestion (see [agents.md](agents.md#revision-session-verdict)) |
 
 A terminal command can sit on the same API for people to use; agents use the MCP tools.
 
@@ -206,30 +206,32 @@ complete                          ← you sign off on merges into this branch
   ```
 
   `git log --grep "Co-Authored-By: Monteverdi"` lists everything agents wrote. The email is a placeholder: GitHub shows a co-author's avatar only when the email belongs to a GitHub account, and otherwise shows the name alone.
-- **Worktree setup:** <a id="worktree-setup"></a>every worktree Monteverdi creates (endeavor, task, station) gets the project's dependencies installed, so edit rules can use the project's tools after each edit. The project sets a **setup command** when the repo is set up; Monteverdi suggests one from the lockfile (`pnpm install --frozen-lockfile`, `npm ci`, ...). With pnpm, packages are hard-linked from its global store, so an unchanged lockfile installs in seconds and uses little disk. When a task edits the manifest or lockfile, Monteverdi re-runs setup in that worktree before the next edit check.
+- **Worktree setup:** <a id="worktree-setup"></a>every worktree Monteverdi creates (endeavor, task, and the clean one for sign-off) gets the project's dependencies installed, so edit rules can use the project's tools after each edit. The project sets a **setup command** when the repo is set up; Monteverdi suggests one from the lockfile (`pnpm install --frozen-lockfile`, `npm ci`, ...). With pnpm, packages are hard-linked from its global store, so an unchanged lockfile installs in seconds and uses little disk. When a task edits the manifest or lockfile, Monteverdi re-runs setup in that worktree before the next edit check.
+- **Rule changes** (decided 2026-11-19) are the one kind of commit that reaches `complete` without an endeavor sign-off: the [legislator](agents.md#legislator) works on a branch off `complete`, your Accept moves `complete` forward, and code cherry-picks the commit onto every endeavor branch, so every branch checks against the same rules. Pushing them is for the publish design.
 - **Rebase short-lived branches, merge long-lived ones.** A finished task rebases onto the endeavor branch's tip. The endeavor branch takes in `complete` by merging, never rebasing, so task branches built on it keep a valid base.
 
 ### Merging a task
 
-1. The build session finishes and calls `submit`. Monteverdi commits the worktree and puts the task onto the endeavor branch's tip as one commit; on a conflict it leaves the markers for the build session to resolve (it knows what its changes are for), and the session submits again.
-2. The **test station** checks out the rebased commit and runs every [rule](#rules). The station is one worktree per endeavor, set up once with a copy of the project folder's `.env` (git doesn't track it, so no worktree gets it on its own; Monteverdi re-copies it when it changes) and its own port. Task worktrees get the same (decided 2026-11-19), so build sessions can run the project's commands and dev server while they build (see [agents.md](agents.md#build-session-running-the-app)). Like every worktree, it gets dependencies through [worktree setup](#worktree-setup).
-3. A rule fails → back to the build session in its task worktree with the failure, then repeat from step 1. If the loop doesn't converge, it escalates to a Dialogue attached to the task, between you and the build session (see [rules.md](rules.md#when-revision-fails)).
-4. Every rule passes → the endeavor branch fast-forwards to the commit. There's no per-task human review; your sign-off happens once, on the root's merge into `complete`.
+Decided 2026-11-19 (replaces the test station; full design in [agents.md](agents.md#revision-where-a-task-is-checked)). A task is checked in its own worktree, which has the project's dependencies, a copy of the project folder's `.env` (git doesn't track it, so no worktree gets it on its own; Monteverdi re-copies it when it changes) and its own port. Nothing reaches the endeavor branch until every check has passed.
 
-Submitted tasks queue for the station and merge one at a time, so each rebase is against a branch that isn't moving. An endeavor can get a second station later if the wait gets long.
+1. The build session finishes and calls `submit`. Monteverdi commits the worktree and applies the task onto the endeavor branch's tip as one commit, in the worktree; on a conflict it leaves the markers for the build session to resolve (it knows what its changes are for), and the session submits again.
+2. The mechanical [rules](#rules) run in the worktree, at that commit, while the build session waits. Tasks are checked in parallel, each in its own worktree.
+3. If any agent revision rules are selected, a fresh revision session reviews the change in the same worktree.
+4. A rule fails → back to the build session in its worktree with the failure, then repeat from step 1. If the loop doesn't converge, it escalates to a Dialogue attached to the task, between you and the build session (see [rules.md](rules.md#when-revision-fails)).
+5. Every rule passes → the task merges under the endeavor's **merge lock**: if the endeavor branch hasn't moved since step 1, it fast-forwards to the commit; if it has, code re-applies the task onto the new tip and re-runs the mechanical rules first. There's no per-task human review; your sign-off happens once, on the root's merge into `complete`.
 
 ### Rules
 
-The station runs the project's **edit and revision rules** (in `monteverdi/rules/edit/` and `monteverdi/rules/revision/`). All selected rules must pass to merge. The full design, including the other three rule types, is in [rules.md](rules.md); in short:
+Revision runs the project's **edit and revision rules** (in `monteverdi/rules/edit/` and `monteverdi/rules/revision/`). All selected rules must pass to merge. The full design, including the other three rule types, is in [rules.md](rules.md); in short:
 
-1. The station's code selects rules by the files the change touched; no model decides which run.
-2. **Edit rules** run first. The build session already ran them after each edit; the station runs them again, because the build step is never trusted.
+1. Code selects rules by the files the change touched; no model decides which run.
+2. **Edit rules** run first. The build session already ran them after each edit; `submit` runs them again, because the build step is never trusted.
 3. **Revision commands** run next, because they're cheap: `tsc`, lint, tests, or the project's own scripts. `submit` runs these two steps while the build session waits, and returns their failures to it directly.
 4. **Agent revision rules** run last: a fresh **revision session** carries them out and must return a verdict for each rule by name.
 
 On failure:
 - A mechanical rule sends the command output back to the build session.
-- An agent rule sends the revision session's notes back.
+- An agent rule sends the revision session's problems back.
 - If the revision session decides **the Answer** is wrong, not the code, it opens a Dialogue on the node (the same path as a build that finds an Answer wrong).
 
 **Conflict prevention:** the build plan records the files each task expects to touch (`files`). Monteverdi's code runs tasks whose `files` overlap one after the other, never in parallel.
@@ -241,7 +243,7 @@ On failure:
 - **The plan is a file**, `<id>.build.md`, rendered by Monteverdi from what the scoping session submits: tasks, order, the node IDs each task builds, the files each touches. You can review it before any code is written. "Plan" always means this file.
 - **Task IDs** are `<id>.build.<n>` (e.g. `checkout.4f1a2.build.1`); "build" has non-hex letters, so it never clashes with a node segment.
 - **Dependencies:** see [Dependencies](#dependencies).
-- **Build commits carry a trailer**, `Monteverdi-Node: <id>`, one per node built, written by Monteverdi when it commits the task (step 1 above). A node is **built** when such a commit is on the endeavor branch, which in this flow means it passed the test station. It's **stale** when its Answer changed after that commit.
+- **Build commits carry a trailer**, `Monteverdi-Node: <id>`, one per node built, written by Monteverdi when it commits the task (step 1 above). A node is **built** when such a commit is on the endeavor branch, which in this flow means it passed revision. It's **stale** when its Answer changed after that commit.
 - **When building shows an Answer is wrong**, the build session doesn't improvise: it opens a Dialogue on that node (making it reopened) and pauses until the Answer is updated.
 
 ### Dependencies
@@ -259,7 +261,7 @@ Everything after that is mechanical. On **Plan build** for an endeavor:
 1. Collect every `Depends on:` line in its subtree.
 2. Drop the ones pointing inside the subtree; those only affect build order, which the scoping session sets and code checks.
 3. Each one pointing outside the subtree must be **solved** for Plan build to be available. Otherwise the UI says why, for example "Blocked: Ledger is discussing."
-4. A task that builds a node runs only once each of that node's dependencies is **built**. Until then it waits in the queue.
+4. A task that builds a node runs only once each of that node's dependencies is **built**. Until then it waits.
 
 Sessions never write `Depends on:` lines themselves: they pass the IDs as a `depends_on` parameter (on `finalize_answer` and the child tools), and code checks each ID exists and writes the lines in one format. The validator rejects cycles, including a node depending on its own ancestor. Depending on a sectioned endeavor means depending on its whole subtree.
 

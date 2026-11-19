@@ -10,7 +10,7 @@ Fresh, coming back (cold or large, or out of context): parts 1, 2, 3, 4, then 5 
   anything is new, then the matching instruction from 6.
 Warm resume: part 5, then the matching instruction from 6. A Retry after the turn limit
   sends 6e alone.
-The station's mechanical failures never come here: they're `submit`'s result.
+Mechanical check failures never come here: they're `submit`'s result.
 -->
 
 <!-- 1. Always (fresh). -->
@@ -44,7 +44,8 @@ the worktree; its reasoning is gone, so re-read what you need.
 </work_so_far>
 
 <!-- 5. What's new. Each sub-part only if it has something in it.
-     review: the revision session's notes, per failed rule, from the latest submit.
+     review: the revision session's problems, per failed rule, from the latest submit,
+       rendered as `file:line: what. Fix: fix`.
      answer_changes: per node (heading with {#id}), the Answer's diff since the commit the
        task's Answers came from. Only after a reopen on a node.
      dialogue: the task's Dialogue. Fresh: all of it. Warm: turns since the session last

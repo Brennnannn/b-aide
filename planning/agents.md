@@ -1,6 +1,6 @@
 # Monteverdi agents
 
-Draft, 2026-11-10. These are first sketches of each agent Monteverdi runs. Each one gets a detailed design later, where we'll tighten the vocabulary and write its rules together. Terms (endeavor, Solution, Answer, Dialogue, Sections, test station, ...) are defined in [language.md](language.md).
+Draft, 2026-11-10. These are first sketches of each agent Monteverdi runs. Each one gets a detailed design later, where we'll tighten the vocabulary and write its rules together. Terms (endeavor, Solution, Answer, Dialogue, Sections, revision, ...) are defined in [language.md](language.md).
 
 ## Configuring any agent
 
@@ -19,6 +19,92 @@ Whether an agent runs as a separate `claude` process or as a subagent, the same 
 
 Monteverdi starts every agent itself. No agent starts another agent to do Monteverdi's work, so results land in files and git instead of piling up in a parent's context.
 
+### Launching any agent
+
+Consolidated 2026-11-19 from the scoping, build and legislator designs. Every agent is a headless `claude -p` process started by Monteverdi's code with the flags below; each agent's own table lists only what differs (working folder, built-in tools, CLAUDE.md, its MCP role, model, turn limit, and anything extra).
+
+| | Every agent |
+|---|---|
+| System text | `--system-prompt-file <run folder>/system.md`: the shared block, the agent's fixed text, then its rules sorted by name, with their embedded commands already run by code. Byte-identical for every run of that agent with the same rules |
+| Working folder | Its worktree, as the process's working directory, so `Read`, `Grep` and `Glob` reach the repo without prompting. The first message names the path, since `Read` takes absolute paths |
+| Built-in tools | `--tools "<list>"` per agent, plus any built-in (`WebFetch`, `WebSearch`) its rules name. Never Agent: no agent starts agents |
+| MCP | `--mcp-config <run folder>/mcp.json` with `--strict-mcp-config`: Monteverdi's server, started with the agent's role so it lists only that role's tools (and words results for that role), plus the servers its rules name, copied from `.mcp.json` |
+| Permissions | `--allowedTools`: its built-in tools, `mcp__monteverdi__*`, and `mcp__<server>__*` for each rule server. A headless run can't answer a prompt, so anything not allowed would just fail |
+| Settings | `--settings <run folder>/settings.json` with `--setting-sources` limited so your own hooks and settings stay out (to verify). Only build sessions' settings hold a hook (the edit-rule hook) |
+| Skills, commands | None (`--disable-slash-commands`); skills reach build sessions only as injected rules |
+| Session ID | `--session-id <uuid>` chosen by code, so any run can be resumed (see [Coming back](#coming-back)) |
+| Output | `--output-format stream-json`: code logs token use per call, reads the context size for the warm-or-small test, and the UI shows progress |
+| Model, effort | `--model`, `--effort` per agent, never changed within a session (it would break the cache) |
+| Turn limit | `--max-turns` per agent, per run. A backstop the session isn't told about, tuned from logged usage (see [When a run fails](#when-a-run-fails)) |
+| Cache lifetime | One hour (decided 2026-11-19): code sets `ENABLE_PROMPT_CACHING_1H=1` for every agent but revision, which is never resumed. On a subscription the hour is already Claude Code's default; on an API key it costs 2× instead of 1.25× per cache write, and pays for itself whenever a session is resumed after more than 5 minutes idle (a 40k Dialogue resumed after 20 minutes: ~4k to read back instead of ~50k to rewrite). The warm threshold follows the lifetime that applies |
+| Compaction | Off. Monteverdi never compacts; an agent that comes back cold starts fresh from files instead (see [token_usage.md](token_usage.md#compaction)) |
+| Run folder | `~/.monteverdi/runs/<session-id>/`, outside the repo, `--add-dir`ed so `Read` can open it: the assembled system text, MCP config, settings, and any long output a tool result points to |
+
+### Coming back
+
+Consolidated 2026-11-19 from the Dialogue, scoping, build and legislator designs: **one mechanism, used by every agent that is brought back.** For each session code keeps its ID, the time of its last API call and the size of its context at that call (from `stream-json`'s usage figures). When the agent is needed again:
+
+- **Resume** (`claude -p --resume <id>` with the same flags and the same system-text file from its run folder) if the session is **warm** (its last call was under ~55 minutes ago, inside the one-hour cache) or **small** (its context is under ~30k tokens, where re-sending it uncached costs about what a fresh start does). The message holds only what's new, then the instruction.
+- **Otherwise start fresh**: the agent's first-message template with the optional parts that apply (the dialogue or conversation so far, the earlier plan, the work already in the worktree), then what's new, then the instruction. The record a fresh session starts from is always a file or Monteverdi's state, never a summary.
+- **Always fresh:** after the context filled up, and when something the session saw was changed by hand (a Dialogue's earlier turns).
+
+**Rules that change while a session can be resumed: no machinery** (decided 2026-11-19). A resume always reuses the session's stored system-text file, so its cache holds; it keeps the rules it started with, and fresh sessions get the current ones. Checks never lag: revision reads edit and revision rules from the commit under test, and every task's next `submit` lands on an endeavor branch that already has an accepted change. Only guidance lags, only in sessions resumed within the cache's lifetime, and a check failing at `submit` teaches what the new rule wants. The task whose escalation prompted the change comes back with the rule's diff anyway.
+
+The fixed text describes the situation ("when you're asked to revise an earlier plan", "you may be brought back to this task") and never how it arrives, so one line covers warm and fresh alike. The thresholds are the same for every agent to start with; code logs which path each return took and what it cost, so they can be tuned per agent.
+
+| Agent | Brought back by |
+|---|---|
+| Dialogue | Your next message, Finalize, turns another session added (a `reopen`) |
+| Scoping | Your feedback on the plan, or a revision after the build was cancelled |
+| Build | Review notes, your turns in its task's Dialogue, an override, Answers settled after its `reopen`, an accepted rule change, a Retry |
+| Legislator | Your reply, a refused Accept |
+| Revision | Never after a wait: always a fresh session, resumed at once only to collect missing verdicts (see [Revision session](#revision-session)) |
+
+### When a run fails
+
+Consolidated 2026-11-19. A session never sees its own turn count or token count, so it can't wind down before a limit; the run just ends, and code decides what follows. One pattern for every agent:
+
+| What happens | Then |
+|---|---|
+| Turn limit reached | The run fails to the UI, which shows its last output and a **Retry** button. Retry comes back through [the one path](#coming-back) with a "carry on" instruction and a fresh count |
+| Process crash or API error (after Claude Code's own retries) | One automatic retry through the one path, then it fails as above |
+| Context full (the API refuses the next call) | One automatic fresh session; if that one fills too, it fails as above |
+| Usage limit reached (decided 2026-11-19) | Not a failure: retrying at once would fail again. The UI shows the run as waiting until the limit resets, and code brings it back through the one path then |
+
+What a failed run leaves behind differs by agent: a Dialogue's file has your message and no reply; a scoping session keeps no partial plan; a build session's edits are in its worktree, committed or not; the legislator's changes are on its branch, where the review shows them. Turn limits per agent:
+
+| Agent | `--max-turns` per run |
+|---|---|
+| Dialogue | 30 |
+| Scoping | `10 + 3 × nodes to build`, capped at 60 |
+| Build | `40 + 20 × nodes`, capped at 150; 40 when it comes back |
+| Legislator | 40 |
+| Revision | `20 + 15 × agent rules`, capped at 80 |
+
+## What only you decide
+
+Consolidated 2026-11-19. What only the user may decide is a control in the UI, never an agent's tool: an agent can suggest it in a `reply`, but code only acts on your press. In one place:
+
+| Control | Where | Code records | Then starts |
+|---|---|---|---|
+| **Plan build** | A fully designed node (see [Before it starts](#scoping-session)) | Nothing until the plan is submitted | A scoping session |
+| Feedback on a plan | The plan, before Build plan | Your words, in the plan's Versions block | The scoping session again, to revise |
+| **Build plan** | A submitted plan | One commit of the plan file | The build sessions, as the plan's order allows |
+| **One-time override** | A task's Dialogue: you name the rule and a reason | The override in the task's state; `Monteverdi-Override: <rule> (<reason>)` on the task's commit | The build session again, told the rule now counts as passed |
+| **Change rule** | A task's Dialogue: you name the rule (the failing one by default) and say what's wrong | Your words; the task stays escalated | The legislator (escalation) |
+| **Accept** on a `suggest_rule` | The suggestion, in the review log | The suggestion as accepted | The legislator (suggestion) |
+| **Dismiss** on a `suggest_rule` (decided 2026-11-19) | The suggestion | The suggestion as declined, so the per-rule log shows it | Nothing |
+| **New rule** | The rules view: you give the scope (project or personal), optionally the rule to change, and what you want | Your request | The legislator (your request) |
+| **Accept** on a rule change | The legislator's review, between its runs | The commit; `complete` moves; cherry-picks onto every endeavor branch, each under its merge lock | The escalated task again, or marks the suggestion done |
+| Reply on a rule change | The legislator's review | Your words, in its conversation | The legislator again |
+| **Discard** on a rule change | The legislator's review, between its runs | The change as discarded; a line in an escalated task's Dialogue | Nothing |
+| **Stop** on a `try_rule` run | The legislator's review, while a run is going | The run as stopped | The legislator carries on, told how long it ran |
+| **Stop** on a running check | A task's checks, while a revision command runs | That rule as failed, with its output so far | The build session gets the failure as usual |
+| **Retry** | A failed run | Nothing | That agent again, through the one path |
+| **Sign off** | An endeavor | To design with the [publish agent](#open) | To design |
+
+Writing in a Dialogue and pressing Finalize also start sessions, but aren't yours alone: a Dialogue session finalizes on its own once you've agreed.
+
 ## Dialogue session
 
 - **Purpose:** works toward a Solution with you, inside the node's dialogue file.
@@ -27,13 +113,23 @@ Monteverdi starts every agent itself. No agent starts another agent to do Montev
 - **Lifetime:** one session per Solution, resumed while its prompt cache is warm; a fresh session from the file once it's cold (below).
 - **Reads:** the node's breadcrumb, its dialogue file, and whatever code it needs to explore to answer well.
 - **Writes:** nothing directly; it has no file-writing tools. Each turn goes through `reply`, and code writes it into the dialogue file. On finalize (once you've agreed to the decisions, or when you say so): `finalize_answer` with the Answer, or, if the Dialogue showed the endeavor has several parts, the child tools (`create_child`, `update_child`, `delete_child`) and then `finalize_sections` with the endeavor's revised explanation. Code assigns IDs and writes the files (see [language.md](language.md#solutions)).
-- **Warm or fresh, one rule:** if the node's session is warm (last call under ~55 minutes ago) or its history is small (under ~30k tokens, where a cold resume costs about what a fresh start does), code resumes it and sends only what's new: any turns added to the file since the session last saw it (another agent's `reopen`, say), then your message or "Finalize now". Otherwise code starts a fresh session whose first message is one template with optional parts: the breadcrumb (always), the dialogue so far (if the file has turns), and the trigger. A brand-new Dialogue is just that template with no dialogue yet; reopening and finalizing need no variants of their own. A hand edit to earlier turns forces a fresh session.
+- **Warm or fresh:** [Coming back](#coming-back). Resumed, it gets only what's new: any turns added to the file since the session last saw it (another agent's `reopen`, say), then your message or "Finalize now". Fresh, its first message is the template's breadcrumb (always), the dialogue so far (if the file has turns), and the trigger. A brand-new Dialogue is just that template with no dialogue yet; reopening and finalizing need no variants of their own. A hand edit to earlier turns forces a fresh session.
 - **Never:** commits (Monteverdi makes the pre-writeup and writeup commits), or edits nodes other than its own and its new children.
 - **Cold start = fresh session from the file.** Build sessions run continuously, so their caches stay warm; Dialogues are what sit idle. When a Dialogue is reactivated after its prompt cache has expired (one hour on a subscription), Monteverdi doesn't resume or compact the old session. It starts a fresh one that reads the node's breadcrumb and the dialogue file, then answers your reply. The conversation is already in the file, so a summary of the old session would only repeat it. What the old session held beyond the file was mostly code it had read and its thinking; the fresh session re-reads only the code it needs. Monteverdi never compacts.
 - **Writes down what it learns.** Because a cold start keeps only the files, a Dialogue session puts anything it found exploring that matters to the decision (file paths, constraints, an approach it ruled out and why) into the collapsed **Findings** block of its turn (see [language.md](language.md#solutions)), not just into its own context. You read the message; a fresh session reads the findings too.
 - **Instructions:** every [Dialogue rule](rules.md#dialogue-rules), injected in full.
-- **Starts lean:** planning needs no build tools. Monteverdi's MCP server and read-only code tools are usually enough. It does load the project's CLAUDE.md, since project context helps design. Built-in tools: `Read`, `Grep`, `Glob`, plus `WebSearch` and `WebFetch` for questions about external APIs (their definitions are small and cached, and adding tools mid-session would break the cache, so they're loaded from the start).
-- **Turn limit:** `--max-turns 30` per run, i.e. up to 30 model calls to produce one reply; it resets with each message. A backstop for a headless run nobody is watching, not a budget. Common practice puts 20–30 at the top end, for complex tasks. Code logs the calls each run uses so the limit can be tuned, and a run that hits it shows in the UI with a Retry button.
+- **Starts lean:** planning needs no build tools. Monteverdi's MCP server and read-only code tools are usually enough.
+
+**Configuration** (what differs from [Launching any agent](#launching-any-agent)):
+
+| | |
+|---|---|
+| Working folder | The endeavor worktree |
+| Built-in tools | `Read`, `Grep`, `Glob`, plus `WebSearch` and `WebFetch` for questions about external APIs (their definitions are small and cached, and adding tools mid-session would break the cache, so they're loaded from the start) |
+| CLAUDE.md | Loaded, since project context helps design |
+| MCP role | `dialogue`: `breadcrumb`, `reopen`, `reply`, `history`, `finalize_answer`, `create_child`, `update_child`, `delete_child`, `finalize_sections`. Drafted in `server/prompts/tools.md` (decided 2026-11-19): `history` takes `back` to pick among several condensed Dialogues; `finalize_answer` can also replace the explanation; `seed` is only on `create_child` (an existing child gets `reopen`); a second `reply` in one turn is an error; `delete_child` refuses a child that's being scoped or built |
+| Model | Opus 5.5, effort `medium` (decided 2026-11-19): you take part in every turn and correct its course, so the deeper thinking `high` buys matters less than it does for a scoping session that runs unwatched |
+| Turn limit | 30 per run, i.e. up to 30 model calls to produce one reply; it resets with each message. Common practice puts 20–30 at the top end, for complex tasks |
 
 ## Scoping session
 
@@ -96,37 +192,20 @@ Two fields belong to the plan rather than a task: **Approach** (one to three sen
 
 **Tools come with rules** (decided 2026-11-18; replaces the tool catalog). There's no catalog of Monteverdi's own: the project's MCP servers are the ones in its `.mcp.json`, and a rule's `tools:` names the ones it needs (see [rules.md](rules.md#tools)). The scoping session chooses rules, never tools: a server has no description to choose it by, while a rule's description says when it applies and its body how to use the tool in this project. Each build session starts with exactly the tools its task's rules declare.
 
-**Configuration:**
+**Configuration** (decided 2026-11-18; only what differs from [Launching any agent](#launching-any-agent)):
 
 | | |
 |---|---|
-Decided 2026-11-18.
-
-| | |
-|---|---|
-| System text | `--system-prompt-file`: the shared block, `scoping.md`, then every [scoping rule](rules.md#scoping-rules) in full |
-| Working folder | The endeavor worktree, as the process's working directory, so `Read`, `Grep` and `Glob` reach the repo without prompting |
-| Built-in tools | `--tools "Read,Grep,Glob"`: read-only by construction; no Bash, no Agent |
+| Working folder | The endeavor worktree |
+| Built-in tools | `Read`, `Grep`, `Glob`: read-only by construction; no Bash |
 | Web tools | None. Outside APIs are settled in Dialogue and written into the Answers; a gap that needs the web is a design gap, so `reopen` |
 | CLAUDE.md, auto memory | Left out. CLAUDE.md is written for interactive coding and re-sent on every call; scoping rules are the channel for what exists and where. A project that wants it adds a scoping rule embedding it (`` !`cat CLAUDE.md` ``) |
-| MCP | `--mcp-config` naming only Monteverdi's server, `--strict-mcp-config`. Our server is started with the session's role and lists only that role's tools (`breadcrumb`, `submit_plan`, `reopen`); the same knowledge lets a tool's result wording differ per role |
-| Permissions | `--allowedTools "Read,Grep,Glob,mcp__monteverdi__*"`: a headless run can't answer a prompt, so a tool needing one would just fail. Listing the read-only tools too costs nothing and doesn't depend on defaults |
-| Run folder | `~/.monteverdi/runs/<session-id>/`, outside the repo and separate from worktrees: the assembled system text, the MCP config, the full changed-files list. `--add-dir` it so `Read` can open the list |
-| Skills, commands | None (`--disable-slash-commands`) |
+| MCP role | `scoping`: `breadcrumb`, `submit_plan`, `reopen` |
+| Run folder holds | Also the full changed-files list on a revision |
 | Model | Opus 5.5, effort `high` to start. A plan runs once per build and a weak one costs every task after it; effort mostly buys thinking, billed as output, small next to the builds it shapes. Build sessions, whose choices are local and guided by build rules, run at `medium` |
-| Session ID | `--session-id <uuid>` chosen by code, so a warm revision can be resumed |
-| Output | `--output-format stream-json`, so code logs token use per call and the UI shows progress |
-| Turn limit | `10 + 3 × nodes to build`, capped at 60 (reached at 17 nodes): the base covers orienting, `submit_plan`, one fix and the final call; 3 per node covers reading for its Reuse and files. The cap stops a runaway run long before the context gets unworkable. Per run, so a warm revision gets a fresh count. The session isn't told its limit. A backstop, tuned from logged usage |
+| Turn limit | `10 + 3 × nodes to build`, capped at 60 (reached at 17 nodes): the base covers orienting, `submit_plan`, one fix and the final call; 3 per node covers reading for its Reuse and files. The cap stops a runaway run long before the context gets unworkable |
 
-**Failure:**
-
-| What happens | Then |
-|---|---|
-| Turn limit reached without a valid plan | The run fails; the UI shows its last output and a Retry button |
-| It calls `reopen` | The build is cancelled; that node is reopened |
-| Process crash or API error | One automatic retry, then it fails as above |
-
-No partial plan is ever kept.
+**Failure:** as for [any run](#when-a-run-fails); no partial plan is ever kept. Besides, if it calls `reopen`, the build is cancelled and that node is reopened.
 
 **Before it starts** (decided 2026-11-17). Plan build is available only when code finds all of these, so no session is spent discovering them:
 
@@ -280,31 +359,25 @@ Decided 2026-11-19. Code knows the session will always need its nodes, so it pas
 
 ### Build session: configuration
 
-In progress, 2026-11-19. Settled so far:
+Decided 2026-11-19; only what differs from [Launching any agent](#launching-any-agent):
 
 | | |
 |---|---|
 | Working folder | The task worktree |
-| Built-in tools | `--tools "Bash,Read,Edit,Write,Grep,Glob"`: it writes code and runs commands. No Agent, no web tools (a rule can declare `WebFetch`), no to-do tool (the task entry is its plan) |
-| Permissions | All of Bash allowed (`--allowedTools "Bash,Read,Edit,Write,Grep,Glob,mcp__monteverdi__*"` plus its rules' servers). A headless run can't answer a prompt, and patterns can't list every command a build needs. No deny list or sandbox: a session told to build just builds. **Backstop in code:** before and after each run, code records the endeavor branch and every other task branch, and fails the run if any of them moved (worktrees share the main repo's `.git`, so a session could move one) |
+| Built-in tools | `Bash`, `Read`, `Edit`, `Write`, `Grep`, `Glob`: it writes code and runs commands. No web tools (a rule can declare `WebFetch`), no to-do tool (the task entry is its plan) |
+| Permissions | All of Bash allowed. Patterns can't list every command a build needs. No deny list or sandbox: a session told to build just builds. **Backstop in code:** before and after each run, code records the endeavor branch and every other task branch, and fails the run if any of them moved (worktrees share the main repo's `.git`, so a session could move one) |
 | CLAUDE.md | Loaded. It's written for exactly this kind of work, and leaving it out would need a new mechanism to bring it back. The fixed text's closing line says Monteverdi's instructions win where it conflicts |
-| MCP | Monteverdi's server (role `build`: `breadcrumb`, `submit`, `reopen`, `reply`) plus its rules' servers, `--strict-mcp-config` |
-| Skills, commands | None (`--disable-slash-commands`); chosen skills are injected as rules |
+| MCP role | `build`: `breadcrumb`, `submit`, `reopen`, `reply`, plus its rules' servers |
+| Settings | The edit-rule hook (below) |
+| Run folder holds | Also long check output for the session to `Read` |
 | Model | Opus 5.5, effort `medium`. Building is where most tokens go, so it's the first place to measure whether a smaller model does as well |
-| Run folder | `~/.monteverdi/runs/<session-id>/`, `--add-dir`ed: system text, MCP config, settings, and long station output for the session to `Read` |
-| Session ID, output | `--session-id` chosen by code (the fix loop resumes it), `--output-format stream-json` |
-| Turn limit | `40 + 20 × nodes`, capped at 150, per run; a fix-loop resume gets 40. A backstop, tuned from logged usage |
-| Compaction | Off. Claude Code's automatic compaction summarizes the conversation near the context limit, and summaries are weakest at what a build session leans on: which files it touched and how. The worktree is an exact record instead (below) |
-| Closing line | "Build this task, then submit it." `submit` succeeding is the end; revisit if code takes over git |
+| Turn limit | `40 + 20 × nodes`, capped at 150, per run; 40 when it comes back |
+| Compaction | Off, as everywhere, and here it matters most: summaries are weakest at what a build session leans on, which files it touched and how. The worktree is an exact record instead |
+| Closing line | "Build this task, then submit it." `submit` succeeding is the end |
 
-**Running out.** A session doesn't see its own token count or turn count, so it can't wind down before a limit; the run just ends, and code decides what follows. Its edits are on disk in the worktree either way, committed or not.
+**Running out** follows [When a run fails](#when-a-run-fails). Its edits are on disk in the worktree either way, committed or not, so the fresh session after a full context gets an optional part saying a previous session ran out, with the changes since the base commit: it loses the old session's reasoning and what it had verified, not its work. Retry after the turn limit resumes the same session, since its context is still usable.
 
-| Limit | Then |
-|---|---|
-| Context full (the API refuses the next call) | Code starts one fresh session automatically: the same first message plus an optional part saying a previous session ran out of context, with the commits on the branch and the uncommitted changes since the base commit. It loses the old session's reasoning and what it had verified, not its work. If that one runs out too, the run fails to the UI |
-| Turn limit | The run fails to the UI with a Retry button, which resumes the same session (its context is still usable) with a fresh count |
-
-**Edit rules attach through one hook** (decided 2026-11-19). Claude Code runs hooks itself, outside the model, so they cost no context; the model sees only what a failing one prints. Code writes a `settings.json` into the run folder (passed with `--settings`; your own hooks are kept out with `--setting-sources`, to verify) holding one PostToolUse hook on `Edit|Write` that calls Monteverdi. Monteverdi reads which file was edited, picks the edit rules whose `paths` match (hook matchers can filter only by tool name, not by file), runs them with the [command contract](rules.md#command-contract)'s environment, and on any failure prints their combined output and exits 2, which Claude Code shows to the model. Rule scripts stay identical at both places they run, and path matching lives in code. The same hook re-runs the setup command when the edited file is the manifest or lockfile. Edits made through Bash don't trigger it; the station re-runs every edit rule anyway.
+**Edit rules attach through one hook** (decided 2026-11-19). Claude Code runs hooks itself, outside the model, so they cost no context; the model sees only what a failing one prints. Code writes a `settings.json` into the run folder (passed with `--settings`; your own hooks are kept out with `--setting-sources`, to verify) holding one PostToolUse hook on `Edit|Write` that calls Monteverdi. Monteverdi reads which file was edited, picks the edit rules whose `paths` match (hook matchers can filter only by tool name, not by file), runs them with the [command contract](rules.md#command-contract)'s environment, and on any failure prints their combined output and exits 2, which Claude Code shows to the model. Rule scripts stay identical at both places they run, and path matching lives in code. The same hook re-runs the setup command when the edited file is the manifest or lockfile. Edits made through Bash don't trigger it; `submit` re-runs every edit rule anyway, and code logs which files Bash calls change so we can see whether that's enough. No time limit and no trimming on Monteverdi's side; see [Edit rules](rules.md#edit-rules).
 
 ### Build session: git and tools
 
@@ -316,9 +389,9 @@ Decided 2026-11-19. Full descriptions, checks and error wording in `server/promp
 
 **Its tools:** `submit`, `reopen`, `reply`, `breadcrumb`. No `check` (dropped 2026-11-19): `submit` runs the mechanical checks itself, and mid-build the session runs quick commands (a typecheck, one test file) in Bash, since its worktree has the project's environment (see [Running the app](#build-session-running-the-app)).
 
-**`submit` runs the mechanical checks first**, so the second wave (build toward the outcome, then fix what the checks find) happens without the fixed text asking for it. Code commits, applies the task onto the endeavor branch's tip, and the station runs the edit rules and revision commands selected by the changed files while the call waits, queue included. Failures come back as the tool's result: the passing rules named in one line, each failure's rule, kind and trimmed output, with the full output in the run folder and its path. The session keeps working in the same run and submits again. Once they pass, the task is queued for the agent revision rules and the session ends its turn. Errors: nothing changed since the base commit; files under `monteverdi/` changed (revert them, and `reopen` if the design is wrong); conflict markers left in a file; a conflict; a `reopen` earlier in the run; already queued.
+**`submit` runs the mechanical checks first**, so the second wave (build toward the outcome, then fix what the checks find) happens without the fixed text asking for it. Code commits, applies the task onto the endeavor branch's tip in the worktree, and runs the edit rules and revision commands selected by the changed files there while the call waits (see [where a task is checked](#revision-where-a-task-is-checked)). Failures come back as the tool's result: the passing rules named in one line, each failure's rule, kind and trimmed output, with the full output in the run folder and its path. The session keeps working in the same run and submits again. Once they pass, the task goes on to review and the session ends its turn. Errors: nothing changed since the base commit; files under `monteverdi/` changed (revert them, and `reopen` if the design is wrong); conflict markers left in a file; a conflict; a `reopen` earlier in the run; already handed to review.
 
-**One way back in.** A build session is brought back later in several situations: the revision session's notes after `submit`, your turns in an escalation Dialogue, Answers settled after its `reopen`, a Retry after the turn limit. All of them go through one path: code resumes the session with a message (`claude -p --resume <id>`) if it's warm or small, and otherwise starts a fresh session from the worktree, with the first message plus an optional part for what's new. Running out of context always takes the fresh route. So `submit` doesn't wait for the agent revision rules: that wait can be long (the queue, then a whole revision session), and blocking through it would need a raised MCP timeout, a live process per waiting task, and recovery when Monteverdi restarts mid-wait, which would use the resume path anyway. The mechanical checks are quick enough to wait for.
+**One way back in.** A build session is brought back later in several situations: the revision session's notes after `submit`, your turns in an escalation Dialogue, Answers settled after its `reopen`, a Retry after the turn limit. All of them go through [the one path](#coming-back): resumed with a message if warm or small, otherwise a fresh session from the worktree, with the first message plus an optional part for what's new. So `submit` doesn't wait for the agent revision rules: that wait can be long (a whole revision session), and blocking through it would need a raised MCP timeout, a live process per waiting task, and recovery when Monteverdi restarts mid-wait, which would use the resume path anyway. The mechanical checks are quick enough to wait for.
 
 **`reopen` on a node pauses the task.** Its work stays in the worktree, tasks waiting on it wait too, and `submit` is refused for the rest of the run. Code records the commit the task's Answers came from. Once every node it reopened is solved again, code compares, mechanically:
 
@@ -336,24 +409,137 @@ The session needn't anticipate rework while building; it's told exactly what cha
 Decided 2026-11-19. A task's Dialogue (`<task-id>.dialogue.md`, next to the plan file) opens when the build session calls `reopen` with its task's ID, whose `reason` is the opening turn, or when code escalates on its own because the same rule failed 3 times (see [rules.md](rules.md#when-revision-fails)).
 
 - **The opening turn, when code escalates:** the build session has just submitted, so it's warm. Code resumes it once to write the opening turn with `reply` (what keeps failing, what it tried, what it thinks the cause is, what it needs from you), and appends each attempt's output below it in a collapsed block. You read its explanation first, with the raw output underneath, the same shape as when it asks for help itself.
-- **A one-time override is a control in the task's Dialogue**, never a tool: only you can grant one. You name the rule and a reason; code records it in the task's state, the station counts that rule as passed on the next `submit`, and code adds `Monteverdi-Override: <rule> (<reason>)` to the task's commit. The build session hears of it in its next message, and may suggest an override in a `reply` but can't grant one. At sign-off the rule runs again on the merged result and fails again; sign-off should show it as overridden, with the task and reason, rather than block (for the publishing design).
-- **An environment fix needs no mechanism of its own.** Once the station or a flaky test is fixed, you say so in the Dialogue ("fixed the test, try again"); the session comes back through the one path and submits its work unchanged.
+- **A one-time override is a control in the task's Dialogue**, never a tool: only you can grant one. You name the rule and a reason; code records it in the task's state, revision counts that rule as passed on the next `submit`, and code adds `Monteverdi-Override: <rule> (<reason>)` to the task's commit. The build session hears of it in its next message, and may suggest an override in a `reply` but can't grant one. At sign-off the rule runs again on the merged result and fails again; sign-off should show it as overridden, with the task and reason, rather than block (for the publishing design).
+- **An environment fix needs no mechanism of its own.** Once the environment or a flaky test is fixed, you say so in the Dialogue ("fixed the test, try again"); the session comes back through the one path and submits its work unchanged.
 - **After the task merges**, code commits the task's Dialogue once and then deletes the file, like a node's Dialogue at writeup: the conversation stays in git history, and nothing needs condensing, since the outcome is in the code and, for an override, in the trailer.
 
-A rule change goes to the session that edits rules (designed with editing); a design change is `reopen` on the node, which the build session can call from inside the Dialogue.
+A rule change goes to the [legislator](#legislator), which only you can start; a design change is `reopen` on the node, which the build session can call from inside the Dialogue.
 
 ### Build session: running the app
 
-Decided 2026-11-19. **Task worktrees get the project's environment**, like the station: a copy of the project folder's `.env` (re-copied when it changes) and a port of their own in `$PORT`. A build session can then run the project's commands and start the dev server itself (a build rule says how), and look at its page with a browser its rules bring, while it builds. Otherwise it would build UI blind and every visual mistake would cost a trip through the station: the queue, a whole revision session and a resume. Resources the worktrees share, such as one dev database that a migration in one task and tests in another both touch, are the project's to handle (a build rule, or a setup command that creates a database per worktree); Monteverdi can't know how a project's data works.
+Decided 2026-11-19. **Task worktrees get the project's environment**, as the test station did (it has since been retired; see [where a task is checked](#revision-where-a-task-is-checked)): a copy of the project folder's `.env` (re-copied when it changes) and a port of their own in `$PORT`. A build session can then run the project's commands and start the dev server itself (a build rule says how), and look at its page with a browser its rules bring, while it builds. Otherwise it would build UI blind and every visual mistake would cost a trip through revision: a whole revision session and a resume. Resources the worktrees share, such as one dev database that a migration in one task and tests in another both touch, are the project's to handle (a build rule, or a setup command that creates a database per worktree); Monteverdi can't know how a project's data works.
 
-## Revision session
+## Revision
 
-- **Purpose:** carries out the selected agent revision rules at the test station (see [rules.md](rules.md#revision-rules)).
-- **Starts:** on each `submit` and at sign-off, once every edit rule and revision command passes.
-- **Runs in:** the test station. Always a fresh session, with no memory of the build.
-- **Reads:** the change, the Answers of the nodes it builds, and the selected agent rules, injected into its instructions with their embedded commands already run.
-- **Checks:** whatever its rules say; typically whether the change does what the Answer says, code quality, and the UI in a browser against the station's dev server.
-- **Writes:** a `verdict` per rule, by name: pass, or notes for the build session, plus an optional `suggest_rule`. A rule without a verdict counts as failed. If it concludes the Answer is wrong rather than the code, it calls `reopen`.
+*Detailed design 2026-11-19. Drafts: fixed text `server/prompts/revision.md` (after the shared block `shared.md`), first message `revision.first-message.md`, `verdict` in `tools.md`.*
+
+### Revision: where a task is checked
+
+Decided 2026-11-19; **replaces the test station.** The station was a separate worktree per endeavor, with its own `.env`, port and dependencies, that every submitted task queued for. Task worktrees now have all three (see [Running the app](#build-session-running-the-app)), so a task is checked where it was built, and nothing leaves its worktree until every check has passed:
+
+1. **`submit`:** code commits the worktree and applies the task onto the endeavor branch's tip as one commit, in the worktree. Conflicts are left there for the build session.
+2. **Mechanical checks** in that worktree, at that commit, while the build session waits: the selected edit rules, then revision commands. Every task has its own worktree, so tasks check in parallel; there's no queue. Failures are `submit`'s result.
+3. **Review:** the build session ends its turn, and if any agent revision rules are selected, a fresh revision session runs in the same worktree, at the same commit, on the same `$PORT`.
+4. **A failure anywhere** leaves the task in its worktree; the build session comes back there with it (see [Coming back](#coming-back)).
+5. **Merge, under a lock.** Each endeavor has one merge lock. Code takes it; if the endeavor branch's tip is still the commit the task was checked on, it fast-forwards and releases, which is the usual case and instant. If the tip moved (another task merged meanwhile), code re-applies the task onto the new tip, re-runs the mechanical checks, then fast-forwards and releases. The review isn't repeated: tasks that ran in parallel have separate `files`, so what it judged hasn't changed. A conflict on re-applying goes back to the build session like any conflict, and its next submit is reviewed again.
+
+Worked example: tasks 1 and 2 run in parallel. Task 1 is applied on tip T0 at 10:00 and checked in 2 minutes; task 2 is applied on T0 at 10:03 and checked by 10:05. Both are reviewed at once. At 10:12 task 1 passes review, takes the lock and fast-forwards to C1. At 10:15 task 2 passes review; the tip is now C1, not T0, so code re-applies task 2 onto C1 and re-runs its mechanical checks under the lock, then fast-forwards. Nobody waited on anyone else's review.
+
+- **Rule changes take the same lock.** The legislator's cherry-pick onto an endeavor branch is just another move of its tip; a task checked against the old rules re-runs its mechanical checks, under the new ones, when it merges.
+- **Ignored files are trusted** (accepted 2026-11-19). The station was a checkout used for nothing else; a task worktree also holds what the build session left in gitignored places (a build cache, generated code), so a check could pass on something not committed. Cleaning them would mean reinstalling dependencies on every submit. The risk is small, and sign-off runs on a clean checkout.
+- **Load.** Several tasks' test suites can run at once on your machine; that's the cost of having no queue. Shared resources such as one dev database stay the project's to handle.
+- **The port is freed** before the review starts, in case the build session left its dev server running.
+- **"Test station" is retired** as a word: the step and its checks are **revision**, matching the rule type.
+
+### Revision: sign-off
+
+Decided 2026-11-19. Before you sign off, the endeavor branch merges in `complete` (a conflict becomes a fix task, as for any [failure at sign-off](rules.md#when-revision-fails)). Code then creates a **clean worktree** at the merged commit, sets it up with the `.env` and a port, runs **every edit rule and revision command** there, and removes it. **Agent revision rules don't run at sign-off:** the change would be the whole endeavor, already reviewed task by task, and your sign-off is the judgment step. How sign-off shows failures and overrides belongs to the [publish agent](#open).
+
+### Revision: edits outside a task's files
+
+Decided 2026-11-19. Tasks run in parallel on the promise that their `files` don't overlap, but the build prompt lets a task change a file outside them when the work truly needs it, so it isn't an error. `submit`'s result notes each changed file outside the task's `files`, naming any task still in flight whose `files` cover it, and the UI shows them. Nothing enforces it: a textual clash with another task shows up as a conflict when the task is applied, and a broken combination as a failed mechanical check when it merges under the lock. The review doesn't judge these edits (see below).
+
+### Revision session
+
+- **Purpose:** carries out the selected agent revision rules on one task's change (see [rules.md](rules.md#revision-rules)) and gives a verdict on each.
+- **Starts:** after a task's `submit` passes its mechanical checks, when any agent revision rule is selected. Not at sign-off.
+- **Runs in:** the task's worktree, at the commit `submit` made.
+- **Always fresh**, with no memory of the build and no earlier review session. It's resumed only once, straight away, if it ended without a verdict for every rule.
+- **Ends:** when every selected rule has a verdict, or when it calls `reopen`.
+- **Only rules are enforced** (decided 2026-11-19). The revision session judges the change against its selected agent revision rules and nothing else; something no rule covers isn't a failure, though it can suggest a rule. With no agent rules selected there's no review, and with no rules selected at all the task passes revision and merges.
+- **Its own process,** like every agent: Monteverdi isn't a Claude session, so there's no parent to host a subagent.
+
+### Revision session: first message
+
+Decided 2026-11-19. One template (`server/prompts/revision.first-message.md`), in order:
+
+1. **Header:** the task, the worktree path, the commit under review and the base it was applied on, and `$PORT`.
+2. **The task entry**, verbatim from the plan: Done and Goal say what later tasks rely on.
+3. **Its nodes as one tree**, as the build session gets them: the Answers are what the code is judged against.
+4. **The change:** `git diff <base>..<commit>` in full up to about 1,500 lines; beyond that, the `--stat` summary and the path of the full diff in the run folder.
+5. **Earlier review rounds on this task**, if any: each rule's verdict and problems. A fresh reviewer every round would otherwise find new small things each time and the task would never converge; with them, it checks first that the earlier problems were fixed.
+6. **The instruction**, last.
+
+**Not the builder's words.** The commit message and the task's Dialogue stay out: the reviewer judges the code against the design, not the builder's account of it.
+
+### Revision session: `verdict`
+
+Decided 2026-11-19; wording in `server/prompts/tools.md`. One call per rule: `verdict(rule, pass, problems?, suggest_rule?)`.
+
+- **`problems`** is required when failing: a list of `{file, line?, what, fix}`. Code checks each file is in the change and renders the list for the build session, so each problem reaches it the way a check's output does: where, what's wrong, what to do.
+- **`suggest_rule`** is optional, on a pass or a fail: `{type, name?, proposal}`, where `type` is build, edit or revision, `name` an existing rule to change (left out for a new one), and `proposal` what the rule should say or check. Code attaches the commit and the verdict, so the suggestion doesn't repeat the evidence. The reviewer can't know whether a problem recurs across tasks; code's per-rule log shows you that.
+- **A second verdict for the same rule replaces the first**, silently: a correction is its only meaning.
+- **Missing verdicts:** code resumes the session once, while it's warm, and asks for the rules it skipped. Any still missing count as failed.
+- **Failures and review rounds count toward escalation** like any other failure of the rule (3 by default).
+- **`reopen` on a node** (the Answer is wrong, not the code) pauses the task as a build session's `reopen` does; the verdicts already given are kept and come back with the Answer changes. It can't open the task's Dialogue: a disagreement between builder and reviewer reaches you through the build session asking for help.
+
+### Revision session: configuration
+
+Decided 2026-11-19; only what differs from [Launching any agent](#launching-any-agent):
+
+| | |
+|---|---|
+| Working folder | The task worktree |
+| Built-in tools | `Read`, `Grep`, `Glob`, `Bash`: to start the dev server the way the build session did and run what a rule asks for. Plus its rules' tools, such as a browser |
+| Backstop in code | Code records the worktree's state before the run; any change to it afterwards is reverted and reported, so review never edits the code it judges |
+| CLAUDE.md | Loaded: judging code means knowing the project's conventions |
+| MCP role | `revision`: `breadcrumb`, `reopen`, `verdict` |
+| System text | The shared block, `revision.md`, then the selected agent revision rules, with their embedded commands already run |
+| Cache | Five minutes: it's never resumed after a wait |
+| Model | Opus 5.5, effort `medium` |
+| Turn limit | `20 + 15 × agent rules`, capped at 80: browser checks take many calls |
+
+## Legislator
+
+*Detailed design in progress, 2026-11-19. Drafts: fixed text `server/prompts/legislator.md` (after the shared block `shared.md`), first message `legislator.first-message.md`, tools `tools.md`. Named the legislator (decided 2026-11-19): rule editing isn't one of the five steps, so it doesn't follow the "<step> session" pattern, and a distinct name reads clearly.*
+
+- **Purpose:** writes and changes the project's rules with you, any of the five types (decided 2026-11-19): `suggest_rule` mostly targets build rules, escalations mostly revision commands, and you may ask for any kind.
+- **Reuses what the project has.** Where the project's linter, type checker or test runner can check something, a rule's command calls it; the legislator writes a script only where the stack has nothing that fits.
+- **Shows a command works** (decided 2026-11-19): before proposing one, it runs it on the current code, on a small sample it writes that the command should catch, and, when the request came from one, on the commit that prompted it (the task's last `submit` for an escalation, the reviewed commit for a suggestion). Code checks that commit out into a scratch worktree, runs setup, and removes it afterwards; nothing else is reproduced.
+- **Its own tools, no Bash** (decided 2026-11-19). Monteverdi's server lists tools per role, so these exist only for the legislator. `write_rule` takes the frontmatter as structured fields plus the body, and code validates it all at once before writing `SKILL.md`; `write_rule_file` writes a script in that rule's folder and nowhere else; `try_rule` runs a rule's command under the [command contract](rules.md#command-contract), on the current code, on sample files, or on the prompting commit, exactly as the hook or `submit` would. It also gets `breadcrumb` and `reopen` (decided 2026-11-19), so `shared.md` stays true for every agent; they cost little and a rule can touch the design. With `Read`, `Grep` and `Glob` for looking, it can't change anything outside the rules or touch git, so `shared.md`'s "Monteverdi's files change only through its tools" holds for rules too.
+- **What code checks** (decided 2026-11-19; wording in `server/prompts/tools.md`). `write_rule` returns every problem at once: the name is a slug, unique in its type and scope; the description isn't empty; fields fit the type (`run` for edit rules and revision commands, `kind` only on revision rules, `paths` not on Dialogue or scoping rules, no `tools` on a command, a body where an agent reads it); `paths` are valid, relative globs inside the repo; `tools` names exist; a file in the rule's folder that `run` names exists; and each embedded `` !`command` `` runs. Fixed silently: a leading `./`, duplicates, a full MCP tool name in `tools` reduced to its server. **Notes**, returned without stopping the write and shown to you: a glob that matches no file today, a project rule shadowing a personal one (or the reverse), and what an agent rule's embedded commands print. Whether a command really runs and fails usefully is left to `try_rule`, which adds a note when a failing run prints nothing. `write_rule_file` stays inside the rule's folder and never writes `SKILL.md`. `delete_rule(type, name, file?)` removes a rule or one of its files. No renaming, since build plans name rules: a rename is a delete and a new rule.
+- **Review** (decided 2026-11-19). The UI shows the diff of the rule's folder, the legislator's latest reply, every `try_rule` run as code recorded it (where it ran, exit code, output), and an "untried since last change" marker when the rule's folder changed after its last run. Its controls are **Accept**, a reply box (the legislator comes back with your message, warm or fresh by the usual rule) and **Discard**. Accept is a control, not a tool: only you make a rule change take effect, so the legislator has no submit tool; it replies and ends its turn. If a check fails on the current code, the UI says next to Accept that tasks touching those files will have to fix existing code; it informs, it doesn't block.
+- **Rules belong to the project, so changes go through `complete`** (decided 2026-11-19). The legislator works on a short branch off `complete` (`monteverdi/rules/<n>`) in a worktree of its own, set up once; nothing is live until you accept, and `try_rule`'s "current code" is `complete`'s. On **Accept**, code re-runs `write_rule`'s checks on every changed rule, commits, and moves `complete` forward to the commit (rebasing first if `complete` moved; if another accepted change touched the same rule meanwhile, the legislator is brought back to redo its change on the new version). Then it **cherry-picks the commit onto every endeavor branch** (`git cherry-pick -x`, so each copy names the original), each under that endeavor's merge lock (see [where a task is checked](#revision-where-a-task-is-checked)); tasks in flight pick it up when they're applied at their next submit, or when they re-run their mechanical checks at merge. Cherry-picking, not merging `complete` in: a merge would bring every endeavor signed off since, with conflicts nobody chose to take on. Because every rule change reaches every branch, `monteverdi/rules/` is identical on all of them, so the copies never conflict, and when an endeavor later merges into `complete` (or takes it in) git sees the same change on both sides and merges it cleanly; the only trace is the copy in history. Code checks that invariant before sign-off (`git diff complete <endeavor> -- monteverdi/rules/` is empty). Accept is your review of that one commit, in place of an endeavor sign-off. Personal rules have no git: Accept copies them into `~/.monteverdi/rules/`.
+- **The commit:** a subject code computes (`Rules: change typecheck (revision)`), the legislator's last reply as the body, the co-author trailers, and `Monteverdi-Task: <id>` when it came from a task. After Accept the worktree and branch are removed. An escalated task's Dialogue gets a line naming the commit, and the task comes back through its one path with the rule's diff and submits again; an accepted suggestion is marked done. **Discard** removes the worktree; an escalated task's Dialogue gets a line saying so, and it stays escalated.
+- **The conversation is kept in Monteverdi's state** (decided 2026-11-19), outside the repo: it's short and operational, and a fresh session gets it in its first message. The commit is the lasting record.
+- **The case goes in the first message** (decided 2026-11-19), not the system text: it's partly other agents' words (a build session's turns, a revision session's notes), which belong in the material the legislator weighs rather than in its instructions.
+- **One mechanism, three starters** (decided 2026-11-19): accepting a revision session's `suggest_rule`, the "rule is wrong" outcome of a task's escalation Dialogue, and you asking for a new rule or a change. Each is a request to change rules plus the material that says why; code writes that material into the session's first message, and the same session handles all three.
+- **Only you start one.** Agents only propose (the revision session through `suggest_rule`, a build session in its `reply`), the same line as the one-time override: a check is never loosened by the session it checks. So in an escalation the build session doesn't fix the rule itself.
+- **A conversation** (decided 2026-11-19): it proposes a change, explaining what it does, and you design it further with it or accept it. A dedicated agent with its own job, lighter than the build process.
+
+### Legislator: configuration
+
+Decided 2026-11-19; only what differs from [Launching any agent](#launching-any-agent):
+
+| | |
+|---|---|
+| Working folder | Its worktree, on `monteverdi/rules/<n>` off `complete` |
+| Built-in tools | `Read`, `Grep`, `Glob`; `WebSearch` and `WebFetch`, to find an existing linter plugin or config option before writing a script. It can't install one: where a plugin would beat a script, it says so in its reply, and adding the dependency is a build like any other |
+| CLAUDE.md | Left out, as for scoping: the rule catalog in its first message is its channel, and it can `Read` CLAUDE.md like any file when it looks for the project's commands |
+| MCP role | `legislator`: `breadcrumb`, `reopen`, `reply`, `write_rule`, `write_rule_file`, `delete_rule`, `try_rule` |
+| Extra folders | The draft copy of your personal rules, `--add-dir`ed so it can read them |
+| Model | Opus 5.5, effort `high`: it runs rarely, and a wrong check costs every task it gates |
+| Turn limit | 40 per run: reading the configs and rules (~10), writing (~3), three `try_rule` runs, a round of fixes and re-runs, the reply |
+
+### Legislator: running and failing
+
+Decided 2026-11-19.
+
+- **Several at once, but one per rule.** Each runs on its own branch, and Accept already handles another change landing first. But two sessions changing the same rule would redo each other's work, so a starter naming a rule that an open legislator session is already changing joins that session instead: its material arrives as what's new ("another request about this rule"), and Accept settles both. Requests that name no rule start their own session.
+- **Accept, Reply and Discard only between runs.** Accepting mid-run would take a half-written change. A run is bounded by its turn limit, and a hung `try_rule` has Stop (below), so waiting for the run to end is never open-ended.
+- **Failures** follow [When a run fails](#when-a-run-fails). Its changes stay on its branch, and the review offers only **Retry**, not Accept: Accept means the legislator has finished and replied, and its last reply is the commit's body. A failed run may have left a change untried or half-fixed, which Retry finishes, tries and explains.
+- **A `try_rule` that doesn't finish.** Checks have no time limit, so neither does `try_rule`. The review shows the running command with its elapsed time and a **Stop** control; stopping kills it and returns `Stopped by the user after 4m12s.` as the tool's result, so the legislator can say what that means for the rule. Claude Code's MCP timeout has to be raised for this role (see [Launch: to verify](#launch-to-verify)).
+- **Discard** removes its worktree and any scratch worktree, and writes the usual line into an escalated task's Dialogue.
 
 ## Vocabulary
 
@@ -363,7 +549,7 @@ Decided:
 - **Plan** means only the build plan, `<id>.build.md`. When a build finds a design decision wrong, that's "the Answer is wrong".
 - **Task ID:** `<id>.build.<n>`. "build" contains non-hex letters, so it can never clash with a node segment.
 - **Brief:** a briefing, not "short": everything an agent starts with. Code assembles the scoping session's; a build session's is its task entry in the plan plus the rules Monteverdi injects.
-- **One name per step**, shared by the step, its rules and its agent: **Dialogue** (Dialogue session), **scoping** (scoping session), **build** (build session), **edit** (no agent: checks after each edit, and again at revision), **revision** (the test station and revision session). See [rules.md](rules.md#five-types-of-rule).
+- **One name per step**, shared by the step, its rules and its agent: **Dialogue** (Dialogue session), **scoping** (scoping session), **build** (build session), **edit** (no agent: checks after each edit, and again at revision), **revision** (the checks at `submit` and the revision session). See [rules.md](rules.md#five-types-of-rule).
 - **Process:** a separate `claude` run Monteverdi starts itself, with its own transcript and session ID. Build sessions are separate processes started by Monteverdi's code, never by the scoping session: each needs its own worktree and must be resumable on its own for the fix loop, which a subagent (living inside its parent) can't do.
 - **A task's files** (`files`, decided 2026-11-18; was `touches`): the files and glob patterns a task expects to create or edit. Plain, and what the plan file, the prompts and the code-change annotations already called it. Not `paths`, which rules use for the files a rule concerns: code compares the two, so they need different names.
 
@@ -380,16 +566,24 @@ Things about Claude Code's behaviour that the agent designs assume and that need
 - **User-scope MCP servers.** A personal rule may name one of your own servers rather than one in `.mcp.json`. They live in Claude Code's own config; find a stable way to read one's definition (`claude mcp get <name>`, say) or fall back to `.mcp.json` only.
 - **Build sessions** (noted 2026-11-19):
   - **Our settings file.** That `--settings <run folder>/settings.json` loads the edit-rule hook, and that `--setting-sources` keeps your own hooks and settings out while still applying ours.
-  - **The hook's feedback.** That a PostToolUse hook exiting 2 shows its stderr to the model after `Edit` and `Write`, as the edit-rule design assumes.
+  - **The hook's feedback.** That a PostToolUse hook exiting 2 shows its stderr to the model after `Edit` and `Write`, as the edit-rule design assumes. Claude Code's hooks docs (read 2026-11-19) confirm exit 2 "shows stderr to Claude", and cap plain **stdout** at 10,000 characters (longer output goes to a file with a 2,000-character preview, and the model isn't told to read it; no setting raises it). They state no cap for stderr: check whether one applies, since edit-rule output passes through untrimmed.
+  - **The hook's timeout.** The docs give a default of 600 seconds for a command hook, set per hook in seconds with `timeout`, and state no maximum. Confirm a very large value (a day, say) is accepted, so ours never cuts an edit rule off.
+  - **Background shells on exit.** Whether a dev server the build session started with Bash is killed when its process exits; code frees `$PORT` before review either way.
   - **Turning compaction off** in a headless run: find the setting or environment variable, and confirm none happens.
   - **Context full.** What a refused call looks like in `stream-json` output, so code can tell it apart from other errors and start the fresh session.
-  - **The MCP timeout.** That a tool call can wait as long as `submit`'s checks take, queue included; if not, raise Claude Code's MCP timeout for build sessions.
+  - **The MCP timeout.** That a tool call can wait as long as `submit`'s checks take; if not, raise Claude Code's MCP timeout for build sessions.
   - **Resuming headless.** That `claude -p --resume <id> "<message>"` with the same flags continues the session with its cache intact, and that `--max-turns` counts per run.
 - **The MCP schema check.** Confirm what a shape error (missing field, wrong type) looks like to the model, so our own errors can match its tone.
+- **Any agent** (noted 2026-11-19, from the consolidation):
+  - **Resuming with the stored system text.** That `--resume` with the same `--system-prompt-file` bytes hits the cache, and what happens if the file differs (rules changed since the session started).
+  - **The cache's lifetime.** One hour on a subscription, five minutes on an API key unless `ENABLE_PROMPT_CACHING_1H=1` is set. The ~55-minute warm threshold assumes an hour; find how code can tell which applies.
+  - **Usage limits.** What a subscription's usage limit looks like in `stream-json`, so code can tell it from a crash (retrying at once would fail again).
+  - **Stopping a run.** That killing a headless process (Discard, Stop) leaves a transcript `--resume` can still continue.
+- **Legislator** (noted 2026-11-19):
+  - **Scratch worktree setup time.** How long `try_rule`'s `prompting` checkout and setup take on a real project, first time and again; if it's long, keep one scratch worktree per legislator session instead of one per run.
+  - **The MCP timeout** for `try_rule`, which has no time limit: as for `submit`, raise Claude Code's MCP timeout for this role.
 
 ## Open
 
 - **Vocabulary pass** across all agents, together (in progress; see [Vocabulary](#vocabulary)).
-- **Rules for each agent:** what each brief must contain, its tool allowlist, model and turn limit.
-- **Process or subagent:** decided for the scoping session and build sessions (own processes). Still to confirm for the revision session and Dialogue sessions.
-- **Station check of `files`** (idea, 2026-11-18). Code could compare a submitted task's changed files with its `files` and flag edits outside them, since tasks were allowed to run in parallel on the promise that they don't overlap. Mechanical, so it belongs to the station rather than to any brief. Decide with the station's design.
+- **Publish agent:** not designed. Owns git that needs judgment about how a project ships: sign-off into `complete`, pushing, release cuts, hotfixes; rule commits that reached `complete` through Accept; overrides shown at sign-off.

@@ -1,9 +1,15 @@
 <!--
-Monteverdi's MCP tools as the scoping and build sessions see them: each tool's description
-and its parameters' descriptions (the model reads these), what code checks, and the wording
-of what comes back. The system text says when and why to use each tool; this says what it
-takes. Dialogue's tools (reply, finalize_answer, the child tools, finalize_sections, history)
-are still to draft here; build sessions get `reply` too, for their task's Dialogue.
+Monteverdi's MCP tools as every agent sees them: each tool's description and its parameters' descriptions (the model reads these), what
+code checks, and the wording of what comes back. The system text says when and why to use
+each tool; this says what it takes.
+
+Roles and their tools:
+- dialogue: breadcrumb, reopen, reply, history, finalize_answer, create_child, update_child,
+  delete_child, finalize_sections
+- scoping: breadcrumb, reopen, submit_plan
+- build: breadcrumb, reopen, reply, submit
+- legislator: breadcrumb, reopen, reply, write_rule, write_rule_file, delete_rule, try_rule
+- revision: breadcrumb, reopen, verdict
 
 The server is started with the session's role and lists only that role's tools; it also
 words descriptions and results per role where noted.
@@ -36,7 +42,8 @@ Shared by every agent; the result is worded per role.
 **Description:** Opens a Dialogue on a node whose Answer is wrong, contradicts the code, or
 leaves open a decision your work needs, and pauses the work that waits on it. `reason`
 becomes the Dialogue's first turn. Build adds: or, with your task's ID, opens your task's
-Dialogue to ask the user for help when you're stuck.
+Dialogue to ask the user for help when you're stuck. For the legislator, reopening pauses
+nothing: the rule change carries on.
 
 | Parameter | Type | Description |
 |---|---|---|
@@ -58,6 +65,13 @@ other nodes you've found, then end your turn.`
 
 **Result (build, a node):** `Reopened checkout.4f1a2.b7d05.1c2e3; this task is paused until
 its Dialogue settles, and your work stays in the worktree. Reopen any other nodes you've
+found, then end your turn.`
+
+**Result (legislator):** `Reopened checkout.4f1a2.b7d05; the user will settle it in its
+Dialogue. Carry on with the rule change.`
+
+**Result (revision):** `Reopened checkout.4f1a2.b7d05.1c2e3; this task is paused until its
+Dialogue settles, and the verdicts you've given are kept. Reopen any other nodes you've
 found, then end your turn.`
 
 **Result (build, its task):** `Opened this task's Dialogue with your reason. End your turn;
@@ -118,14 +132,200 @@ has N problems; fix them and submit the whole plan again:`
 
 **Result on success:** `Plan submitted. End your turn.`
 
-# reply (build)
+# reply
 
-Dialogue's `reply` is still to draft here; build sessions get the same tool, listed from the
-start (adding a tool mid-session would break the cache) and refused until the task's Dialogue
-is open. The description adds, for build: `Only while your task's Dialogue is open.`
+Dialogue, build and legislator; the description, parameters and result are worded per role.
 
-**Error (build, no task Dialogue open):** `reply is for your task's Dialogue, and none is open.
-To ask the user for help, call reopen with your task's ID, checkout.4f1a2.b7d05.build.1.`
+**Description (dialogue):** Posts your turn in this Dialogue. Call it once, at the end of your
+turn, with your whole answer, then end your turn. Monteverdi writes it into the Dialogue file
+under your name.
+
+**Description (build):** Posts your turn in your task's Dialogue with the user. Only while your
+task's Dialogue is open. Call it once, at the end of your turn, then end your turn.
+
+**Description (legislator):** Your turn in the conversation about this rule change: what you
+changed and why, what the runs showed, what you assumed. Call it once, at the end of your
+turn, then end your turn. Your last reply before the user accepts becomes the commit's body.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `message` | string, required | Your turn, in Markdown. Bold and lists for structure; no headings (they're reserved for the design's nodes). |
+| `findings` | string | Dialogue and build only. What you learned exploring that bears on the decision and that someone starting from the file alone would need: file paths, constraints, approaches you ruled out and why. Shown collapsed under your turn. |
+
+The legislator's `reply` has no `findings`: its conversation is kept in Monteverdi's state,
+and the commit is the lasting record. Build sessions get `reply` from the start (adding a
+tool mid-session would break the cache) and it's refused until the task's Dialogue is open.
+
+**Does:** writes `**Claude:**`, the message and, if given, a collapsed `<details>` Findings
+block as the next turn of the node's or task's Dialogue file (for the legislator, the next
+turn of its conversation).
+
+**Fixed silently:** headings in `message` or `findings` become bold lines; trailing
+whitespace; a leading `**Claude:**` the session wrote itself.
+
+**Checks and errors:**
+
+| Check | Error |
+|---|---|
+| `message` isn't empty | `message is empty. Write your turn.` |
+| One reply per turn | `You've already replied this turn. End your turn; the user will answer.` |
+| (build) The task's Dialogue is open | `reply is for your task's Dialogue, and none is open. To ask the user for help, call reopen with your task's ID, checkout.4f1a2.b7d05.build.1.` |
+
+**Result:** `Posted. End your turn.`
+
+# history
+
+Dialogue only.
+
+**Description:** Returns how a node's Answer or Sections were reached: the full Dialogue as it
+stood just before it was condensed. Use it when the reasons behind a decision matter to the
+one in front of you.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `id` | string, required | The node. |
+| `back` | integer, default 1 | Which condensed Dialogue: 1 is the most recent, 2 the one before, and so on. |
+
+**Does:** finds the node's pre-writeup commits (newest first) and returns the Dialogue file
+from the `back`-th, headed with its date and what it ended in (an Answer, or Sections).
+
+**Errors:**
+- `No node checkout.4f1a2.zzzzz. Its nearest existing ancestor is checkout.4f1a2.`
+- `checkout.4f1a2.b7d05 has never had a Dialogue condensed.`
+- `checkout.4f1a2.b7d05 has 2 condensed Dialogues; back: 3 is too far.`
+
+**Result:** `Dialogue 1 of 2 on Refunds (checkout.4f1a2.b7d05), condensed 2026-11-14 into an
+Answer:` then the file.
+
+# finalize_answer
+
+Dialogue only.
+
+**Description:** Condenses this Dialogue into the node's Answer and closes it. Monteverdi
+commits the Dialogue as it stands, writes the Answer into the node, deletes the Dialogue file
+and commits again.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `answer` | string, required | The decided result, written for someone who never saw this Dialogue to build from: what to build, each decision, and the reason wherever a builder could otherwise go wrong. Markdown, no headings. Replaces any earlier Answer. |
+| `explanation` | string | Only if the Dialogue changed what the endeavor is: its new explanation, whose first sentence is its summary. Leave out to keep the current one. |
+| `depends_on` | string[] | IDs of nodes that must be built before this one. Replaces the node's current list; pass `[]` to clear it. Leave out to keep it. |
+
+**Fixed silently:** headings in `answer` become bold lines; duplicate or self-repeated IDs in
+`depends_on`; trailing whitespace.
+
+**Checks and errors.** Every problem at once, headed `Nothing was finalized; N problems:`
+
+| Check | Error |
+|---|---|
+| `answer` isn't empty | `answer is empty. Write the decided result.` |
+| The node has no Sections | `Refunds has Sections, so it can't have an Answer too. To replace them with an Answer, delete its children with delete_child first; to keep them, call finalize_sections.` |
+| `depends_on` IDs exist | `depends_on: no node checkout.4f1a2.zzzzz.` |
+| Not itself, an ancestor or a descendant | `depends_on: checkout.4f1a2 is an ancestor of this node; a node is built as part of its ancestors.` |
+| No cycle | `depends_on: Ledger already depends on Refunds (through Ledger entries), so this would be a cycle.` |
+| The summary fits | `explanation: the first sentence is 41 words; the summary is copied wherever the node is listed, so keep it under about 25.` |
+
+**Result:** `Refunds now has its Answer; the Dialogue is committed and closed. End your turn.
+If the user objects, reply as usual: that reopens the node.`
+
+# create_child
+
+Dialogue only.
+
+**Description:** Adds a child endeavor to this node, for when the Dialogue shows the endeavor
+has several parts. Written at once; the split takes effect when you call finalize_sections.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `title` | string, required | Short, unique among its siblings. |
+| `explanation` | string, required | What this part is and what was decided about it alone. The first sentence is its summary. |
+| `depends_on` | string[] | IDs of nodes this child needs built first. A sibling created earlier in this turn can be named by its ID from that call's result. |
+| `seed` | string | What's still open about this child: where the discussion stands, as the opening turn of the child's own Dialogue. Leave out when nothing is open. |
+| `after` | string | ID of the sibling to place it after. Leave out to add it at the end. |
+
+**Does:** assigns a random segment, writes the child under this node's Sections (inline or
+in its own file, as the split budget decides), and, with `seed`, opens its Dialogue file
+with that turn. Nothing is committed until finalize_sections.
+
+**Fixed silently:** headings in text fields become bold lines; trailing whitespace.
+
+**Checks and errors** (every problem at once, headed `The child wasn't created; N problems:`):
+empty `title` or `explanation`; a sibling with the same title (`Refunds already has a child
+"Refund API" (checkout.4f1a2.b7d05.1c2e3); use update_child to change it.`); `depends_on` as
+for finalize_answer; `after` not a child of this node.
+
+**Result:** `Created Refund API (checkout.4f1a2.b7d05.1c2e3), with a seed.`
+
+# update_child
+
+Dialogue only.
+
+**Description:** Changes one of this node's children: its title, explanation, dependencies or
+place. Its ID stays. Pass only what changes.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `id` | string, required | The child. |
+| `title` | string | New title. |
+| `explanation` | string | New explanation, whole. |
+| `depends_on` | string[] | Replaces its list; `[]` clears it. |
+| `after` | string | ID of the sibling to move it after; `""` moves it first. |
+
+If the change makes a child's Answer wrong, call `reopen` on it with why; `update_child` doesn't
+touch Answers or Dialogues.
+
+**Checks and errors:** the ID is a child of this node (`checkout.e81d4 isn't a child of
+Refunds. Its children: Refund API (…1c2e3), Ledger entries (…7a9f0).`); at least one field
+given; the same checks as create_child for what's given.
+
+**Result:** `Updated Refund API: title, depends_on.`
+
+# delete_child
+
+Dialogue only.
+
+**Description:** Deletes one of this node's children and everything under it. Built code stays
+where it is: say in another child's explanation what happens to it.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `id` | string, required | The child. |
+| `reason` | string, required | Why it goes. Kept in the commit, so the user sees it in review. |
+
+**Checks and errors:**
+
+| Check | Error |
+|---|---|
+| A child of this node | as update_child |
+| Not being scoped or built | `Refund API is being built (task checkout.4f1a2.b7d05.build.1). It can't be deleted until that build finishes or is cancelled.` |
+| `reason` isn't empty | `reason is empty. Say why this child goes.` |
+
+**Result:** `Deleted Refund API and 2 nodes under it.` For a built node, adds: `Its code is
+still in server/refunds/ (from its build); say in a child's explanation what happens to it.`
+
+# finalize_sections
+
+Dialogue only.
+
+**Description:** Closes this Dialogue with the node split into its children. Monteverdi
+commits the Dialogue as it stands, writes the explanation, deletes the Dialogue file and
+commits again, children and their seeds included.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `explanation` | string, required | The endeavor's explanation, keeping what was decided for the whole. What's about one child belongs in that child. The first sentence is its summary. |
+| `depends_on` | string[] | As for finalize_answer. |
+
+**Does:** if the node had an Answer, removes it (a node has an Answer or Sections, not both);
+the pre-writeup commit keeps it in history.
+
+**Checks and errors** (every problem at once, headed `Nothing was finalized; N problems:`):
+empty `explanation`; the node has no children (`Refunds has no children yet. Create them with
+create_child, or call finalize_answer for an Answer.`); `depends_on` and the summary as for
+finalize_answer.
+
+**Result:** `Refunds now has 3 Sections; 2 have seeds waiting in their Dialogues. The Dialogue
+is committed and closed. End your turn.`
 
 # submit
 
@@ -145,9 +345,12 @@ end your turn.
 2. Commits it on the task branch and applies the task onto the endeavor branch's tip as one
    commit, with `message` and the trailers (`Monteverdi-Node:` per node, co-authors). On a
    conflict, leaves the markers in the worktree.
-3. Runs the edit rules and revision commands selected by the changed files, at the station,
-   waiting its turn in the queue.
-4. Queues the task for the agent revision rules, or merges it if none are selected.
+3. Runs the edit rules and revision commands selected by the changed files, in the worktree,
+   at that commit. No time limit; the user can stop a check from the UI, which counts as it
+   failing.
+4. Hands the task to review (a revision session, in the same worktree) if any agent revision
+   rules are selected; otherwise merges it under the endeavor's merge lock, re-applying it
+   and re-running step 3 first if the endeavor branch moved.
 
 **Fixed silently:** trailing whitespace in `message`; trailers the session wrote itself
 (code writes its own).
@@ -161,7 +364,7 @@ end your turn.
 | Nothing under `monteverdi/` changed | `You changed files under monteverdi/: monteverdi/endeavors/checkout/checkout.4f1a2.md. Monteverdi's files change only through its tools, so restore them (git checkout -- <path>). If the design is wrong, call reopen on its node.` |
 | No conflict markers left | `server/routes.ts still has conflict markers (lines 40-52). Resolve them, then submit again.` |
 | No `reopen` earlier this run | `This task is paused by your reopen, so there's nothing to submit. End your turn.` |
-| Not already queued | `This task is already queued for review. End your turn.` |
+| Not already in review | `This task is already in review. End your turn.` |
 
 **Result on a conflict:** `Your changes conflict with the endeavor branch in server/routes.ts,
 changed by task 2 (Refund emails), which merged after your task started. The conflict
@@ -177,7 +380,203 @@ path of the full output in the run folder; then `Passed: color-tokens, lint, for
    Full output: {run_dir}/submit-2/typecheck.txt
 ```
 
-**Result on success:** `All 6 checks passed; the task is queued for review. End your turn;
+A stopped check's item ends `Stopped by the user after 14m03s.`
+
+**Result on success:** `All 6 checks passed; the task goes on to review. End your turn;
 Monteverdi will bring you back if review finds anything.` With no agent rules selected:
 `All 6 checks passed and the task merged. End your turn.`
 
+**Note, on any result after the checks ran,** when the task changed files outside its `files`
+(the UI shows the same list; nothing enforces it): `Changed outside this
+task's files: server/db/schema.ts (also in task 3's files, still in flight). Change only what
+the work needs there.`
+
+# write_rule
+
+Legislator only.
+
+**Description:** Writes a rule's `SKILL.md`, creating the rule if it's new. Pass the whole
+frontmatter and body: they replace what's there. Monteverdi checks it and returns every
+problem at once; fix them and call again. Notes in the result are written anyway; mention
+them to the user if they matter.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `scope` | `"project"` or `"personal"`, default `"project"` | Personal only when the user asks for a rule of their own. |
+| `type` | `"dialogue"`, `"scoping"`, `"build"`, `"edit"` or `"revision"`, required | Which agent or step the rule is for. |
+| `name` | string, required | The rule's folder name: lowercase letters, digits and hyphens. |
+| `description` | string, required | When the rule applies, in one sentence. Build rules are chosen by it; for a check, it says what passing means. |
+| `paths` | string[] | Build, edit and revision rules: glob patterns, relative to the repository root, for the files the rule concerns. Without it a check runs on every change, and a build rule is chosen only by its description. |
+| `run` | string | Edit rules and revision commands: the command, run from the repository root. A script in the rule's folder is named by its path from the root, e.g. `node monteverdi/rules/edit/color-tokens/check.mjs`. |
+| `kind` | `"command"` or `"agent"` | Revision rules only. |
+| `tools` | string[] | Rules an agent reads: MCP servers from the project's `.mcp.json`, or `WebFetch`, `WebSearch`. |
+| `body` | string | Markdown. For guidance and agent rules, what the agent reads, with any `` !`command` `` whose output it should get. Optional for commands. |
+
+**Does:** writes `SKILL.md` in the rule's folder in the legislator's worktree (or its draft
+copy of the personal rules folder). Frontmatter keys this tool doesn't take, already in the
+file, are kept. Runs each embedded `` !`command` `` once, as it would run when the rule is
+injected.
+
+**Fixed silently:** a leading `./` in `paths`; duplicate entries; a full MCP tool name in
+`tools` (`mcp__playwright__browser_navigate` → `playwright`); trailing whitespace.
+
+**Checks and errors.** Every problem at once, as a numbered list headed `The rule has N
+problems; fix them and call write_rule again:`
+
+| Check | Error |
+|---|---|
+| `name` is a slug | `name "Color Tokens" isn't valid: use lowercase letters, digits and hyphens, e.g. color-tokens.` |
+| `description` isn't empty | `description is empty. Say when this rule applies.` |
+| A check that runs has `run` | `edit rules run a command, so they need run.` · `kind: command needs run.` |
+| Revision rules have `kind` | `revision rules need kind: command or agent.` |
+| `kind` only on revision rules | `kind is only for revision rules.` |
+| `run` only on commands | `run is for edit rules and revision commands; a build rule is read, not run.` |
+| `paths` only where something selects by it | `paths is for build, edit and revision rules; every Dialogue rule reaches every Dialogue session.` |
+| `tools` only where an agent reads the rule | `tools is for rules an agent reads; a command can't use MCP servers.` |
+| A body where an agent reads it | `A build rule's body is what the build session reads; it's empty.` |
+| `paths` are valid, relative, inside the repo | `paths: "src/[pages" isn't a valid pattern.` · `paths: "../shared/**" is outside the repository.` |
+| `tools` exist | `tools: no server "playwrite" in .mcp.json. Servers: playwright, postgres.` |
+| A file `run` names in the rule's folder exists | `run names monteverdi/rules/edit/color-tokens/check.mjs, which doesn't exist. Write it with write_rule_file.` |
+| Embedded commands run | The command and its exit code, `It runs whenever this rule is injected, so it has to work:`, then its output. |
+
+**Notes** (written anyway, listed after the result):
+- `paths: "src/legacy/**" matches no file today.`
+- `A personal build rule "ui" exists too; this project rule takes its place in this project.`
+  (or, for a personal rule, the reverse)
+- For a rule with embedded commands: what each printed, so the user sees what the agent will
+  get.
+
+**Result:** `Wrote monteverdi/rules/edit/color-tokens/SKILL.md.` Then any notes.
+
+# write_rule_file
+
+Legislator only.
+
+**Description:** Writes a file in a rule's folder: a script its command runs, or an example
+its body points to. Pass the whole content. The rule must exist; write its `SKILL.md` with
+`write_rule` first.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `scope` | `"project"` or `"personal"`, default `"project"` | |
+| `type` | rule type, required | |
+| `name` | string, required | The rule. |
+| `path` | string, required | Relative to the rule's folder, e.g. `check.mjs`. |
+| `content` | string, required | The whole file. |
+
+**Checks and errors:**
+
+| Check | Error |
+|---|---|
+| The rule exists | `No edit rule "color-tokens". Create it with write_rule first.` |
+| Inside the rule's folder | `path "../ui/x.mjs" is outside the rule's folder.` |
+| Not `SKILL.md` | `SKILL.md is written with write_rule.` |
+
+**Result:** `Wrote monteverdi/rules/edit/color-tokens/check.mjs.` If the rule's command
+names this file: `Not tried since this change.`
+
+# delete_rule
+
+Legislator only.
+
+**Description:** Deletes a rule, or one file in its folder. Rules can't be renamed (build
+plans name them), so a rename is a delete and a new rule.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `scope` | `"project"` or `"personal"`, default `"project"` | |
+| `type` | rule type, required | |
+| `name` | string, required | The rule. |
+| `file` | string | A file in its folder, relative to it. Without it, the whole rule goes. |
+
+**Errors:**
+- `No edit rule "color-token". Edit rules: color-tokens, no-console.`
+- `color-tokens has no file chek.mjs. Its files: SKILL.md, check.mjs.`
+- `To delete SKILL.md, delete the rule (leave out file).`
+
+**Result:** `Deleted the edit rule color-tokens.` If its command named the deleted file:
+`Its run still names check.mjs; change run with write_rule.`
+
+# try_rule
+
+Legislator only.
+
+**Description:** Runs a check's command the way Monteverdi will, with your current version of
+the rule, and returns its exit code and output. Run it on the current code, on sample files
+you pass, and on the prompting commit when there is one. The user sees every run.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `scope` | `"project"` or `"personal"`, default `"project"` | |
+| `type` | `"edit"` or `"revision"`, required | |
+| `name` | string, required | The rule. |
+| `on` | `"current"`, `"sample"` or `"prompting"`, required | `current`: your worktree, the project's signed-off code. `sample`: your worktree plus the files in `files`, removed again afterwards. `prompting`: the commit your first message names, the way `submit` ran it. |
+| `files` | array of `{path, content}` | With `on: "sample"`: files to write for this run, relative to the repository root. They're the changed files the command sees. |
+| `changed` | string[] | With `on: "current"`: the changed files to give the command, as paths or globs. Defaults to every tracked file the rule's `paths` match, or every tracked file if it has none, as if all the code had just changed. |
+
+**Does:** runs the command under the command contract, using the rule's folder from your
+worktree wherever it runs. With `prompting`, code checks the commit out into a scratch
+worktree (setting it up first, which can take a while the first time), and the changed
+files are the ones that commit changed since its base, as at `submit`. No time limit.
+Code records every run for the user's review.
+
+**Checks and errors:**
+
+| Check | Error |
+|---|---|
+| The rule is a command | `ui-check is an agent rule: it can't be run. Read it as the revision session will.` |
+| `files` with `sample` | `on: "sample" needs files.` |
+| A prompting commit exists | `Your first message names no prompting commit. Use current or sample.` |
+| `changed` matches something | `changed: "src/legacy/**" matches no tracked file.` |
+
+**Result:** `Exit 1 after 2.4s, with 214 changed files.` Then the output trimmed to about 40
+lines, and the path of the full output in the run folder. If the user stopped it:
+`Stopped by the user after 4m12s.` and the output so far. Note, when it failed and printed
+nothing: `It failed without saying why. Print each problem: file, line, what's wrong, what to
+do instead.`
+
+# verdict
+
+Revision only.
+
+**Description:** Gives your verdict on one revision rule. Call it once for every rule in your
+instructions, by name. A rule you give no verdict counts as failed. Calling it again for the
+same rule replaces your earlier verdict.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `rule` | string, required | The rule's name, as in your instructions. |
+| `pass` | boolean, required | Whether the change meets the rule. |
+| `problems` | array, required when `pass` is false | What the build session has to fix, one entry per problem. Only problems the rule covers. |
+| `problems[].file` | string, required | A file in the change, relative to the repository root. |
+| `problems[].line` | integer | The line, if the problem is at one place. |
+| `problems[].what` | string, required | What's wrong, and how you saw it (for a page: what you did and what happened). |
+| `problems[].fix` | string, required | What to do instead. |
+| `suggest_rule` | object | Optional, on a pass or a fail: a rule change that would stop this kind of problem being built, or catch it with a command instead of review. The user decides whether to act on it. |
+| `suggest_rule.type` | `"build"`, `"edit"` or `"revision"`, required | Build to prevent it, edit for a fast per-file check, revision for a slower command. |
+| `suggest_rule.name` | string | An existing rule to change. Leave out to suggest a new one. |
+| `suggest_rule.proposal` | string, required | What the rule should say or check, in a sentence or two. Monteverdi attaches this commit and your verdict as the evidence. |
+
+**Does:** records the verdict against the task's commit. Once every rule has one, code sends
+the failures (each problem as `file:line: what. Fix: fix`) back to the build session, or
+merges the task if all pass. A suggestion goes to the user's review log with its evidence.
+
+**Fixed silently:** trailing whitespace; a leading `./` in `file`; `problems` given on a pass
+(dropped, with a note in the result); a full rule path in `suggest_rule.name`
+(`monteverdi/rules/build/ui` → `ui`).
+
+**Checks and errors** (every problem at once, headed `The verdict wasn't recorded; N
+problems:`):
+
+| Check | Error |
+|---|---|
+| The rule is one of yours | `No rule "ui-chek" in your instructions. Your rules: ui-check, refund-correctness.` |
+| A fail has problems | `ui-check failed with no problems. List what the build session has to fix.` |
+| Each file is in the change | `problems[2].file: server/payments/capture.ts isn't in this change. Problems are about the change; if code outside it is wrong, say so in a problem on the file in the change that relies on it.` |
+| The line exists | `problems[1].line: src/components/RefundDialog.tsx has 88 lines.` |
+| Text fields aren't empty | `problems[1].fix is empty. Say what to do instead.` |
+| A named rule exists | `suggest_rule.name: no build rule "uii". Build rules: ui, api, db. Leave out name to suggest a new rule.` |
+| No `reopen` earlier this run | `This task is paused by your reopen. End your turn.` |
+
+**Result:** `Recorded: ui-check failed (2 problems). Still to give: refund-correctness.` Once
+the last one is in: `All verdicts recorded. End your turn.`
