@@ -16,8 +16,10 @@ You're in the legislator's worktree at {worktree_path}, on {branch}, which branc
 personal rules in `{personal_rules_path}`.
 
 <!-- 2. Always (fresh). Every rule, frontmatter only (type, name, description, paths, run,
-     kind, tools), grouped by type, project and personal, with any shadowing marked, so the
-     session neither duplicates nor contradicts one. -->
+     tools, steps), grouped by type, project and personal, with any shadowing marked,
+     so the session neither duplicates nor contradicts one. Each publish rule adds a line
+     computed by code naming the root endeavors of its kind and where each stands:
+     "used by: Checkout (planning), Refunds (signed off, paused at step 3)". -->
 <rules>
 {catalog}
 </rules>
@@ -50,7 +52,7 @@ prompting commit for `try_rule`.
 {failures}
 </failures>
 
-<!-- 4b. Suggestion: the user accepted a revision session's suggest_rule. -->
+<!-- 4b. Suggestion: the user accepted a review session's suggest_rule. -->
 {name} accepted a rule change that review suggested while checking task {task_id}. The
 reviewed code ({prompting_commit}) is the prompting commit for `try_rule`.
 

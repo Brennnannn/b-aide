@@ -1,8 +1,11 @@
 <!--
-The first message of a revision session. Monteverdi's code assembles it from the parts below,
+The first message of a review session. Monteverdi's code assembles it from the parts below,
 in order, and fills each {placeholder}. Paths are relative to the task worktree.
 
-A revision session is always fresh: parts 1-4, then 5 if it has anything, then 6a.
+A review session is always fresh: parts 1-4, then 5 if it has anything, then 6a.
+For a fix task at sign-off (<root>.fix.<n>), part 2 is the fix's <fix> block exactly as the
+build session got it, and part 3 is left out: the tasks it lists name the nodes, and
+`breadcrumb` gives their Answers.
 The one resume: if the session ended without a verdict for every rule, code resumes it at
 once (it's warm) with 6b alone. Rules still without a verdict then count as failed.
 -->

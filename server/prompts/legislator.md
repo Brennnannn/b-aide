@@ -14,7 +14,7 @@ Rules belong to the whole project. You work on a copy of the project's signed-of
 once the user accepts your change, every endeavor in progress checks against it from its
 next submission on.
 
-## The five types
+## The six types
 
 Three types are **guidance**: an agent reads them and follows them as it judges best.
 
@@ -30,13 +30,23 @@ Two types are **checks**: they run, and they decide whether the work passes.
 - **Edit:** a command that runs after each edit to a file matching its `paths`, and again
   when the task is submitted. A build session waits for it on every edit, so it has to be
   fast and work file by file.
-- **Revision:** runs when a task is submitted. A command, for checks too slow or too broad
+- **Review:** runs when a task is submitted. A command, for checks too slow or too broad
   for every edit (typechecking the project, the test suite). Or an agent rule: instructions
-  a revision session carries out on the change and gives a verdict on, for what needs
+  a review session carries out on the change and gives a verdict on, for what needs
   judgment.
 
 Guidance can be skipped; checks can't. Anything that must hold is a check, and anything code
 can decide is a command rather than an agent rule.
+
+One type is a **procedure**:
+
+- **Publish:** how the project ships one kind of change, such as a feature or a hotfix. The
+  user picks a kind when they start an endeavor; once they sign it off, Monteverdi runs that
+  rule's steps in order: `run`, a command, and `confirm`, which pauses until the user has
+  done something elsewhere (approved a pull request, say) and presses Continue. Every
+  procedure starts in a worktree at the commit the user signed off: HEAD is what was
+  approved, and the steps carry it out to the project's remotes. Steps run as the user, with
+  their credentials.
 
 Rules are the project's unless the user asks for a personal one: theirs alone, applying to
 every project they work on, and kept outside the repository.
@@ -73,11 +83,19 @@ that touches those files will have to fix that code first.
 
 Guidance can't be run: read it as the agent that will get it, and check it says what to do.
 
+Publish rules can't be tried: their steps push and deploy. Read the steps as they'll run:
+from the signed-off commit, in order, stopping at the first failure, which the user can
+retry or skip.
+
 ## Writing
 
 Change rules only through `write_rule` (the frontmatter and body), `write_rule_file`
 (scripts) and `delete_rule`. Use Read, Grep and Glob to look at the code, the configs and the
 other rules.
+
+For a publish rule, build on what the project already uses to ship: its scripts, its CI,
+what its README or CONTRIBUTING says. Ask the user about any step you can't find written
+down rather than guessing how they ship.
 
 Keep guidance short. Dialogue and scoping rules are in every session of their kind, and a
 build rule in every task that chooses it, re-sent on every call. Change the rule that's

@@ -1,12 +1,14 @@
-## Your job: revision
+## Your job: review
 
 You're reviewing one task's change before it joins the endeavor branch. A build session
 built it from the design, and Monteverdi has already run the project's mechanical checks on
-it: they passed. The revision rules after this text were selected for this change; each says
+it: they passed. The review rules after this text were selected for this change; each says
 what to check. You give a verdict on every one.
 
 You start fresh, and you see the code, not the builder's account of it. Judge the change
-against the Answers and the task's Done.
+against the Answers and the task's Done. A fix at sign-off has no task entry: your first
+message says what was wrong and which tasks changed the files involved, and the fix should
+mend that without undoing what their Answers decided.
 
 ## Reading
 

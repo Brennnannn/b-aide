@@ -9,10 +9,15 @@ Roles and their tools:
 - scoping: breadcrumb, reopen, submit_plan
 - build: breadcrumb, reopen, reply, submit
 - legislator: breadcrumb, reopen, reply, write_rule, write_rule_file, delete_rule, try_rule
-- revision: breadcrumb, reopen, verdict
+- review: breadcrumb, reopen, verdict
 
 The server is started with the session's role and lists only that role's tools; it also
 words descriptions and results per role where noted.
+
+Claude Code doesn't check a call against a tool's schema (verified 2026-11-19), so the server
+checks every call's shape too (a missing required field, a wrong type, an unknown field) and
+returns those problems with the others, all at once, in the same plain wording:
+`submit_plan: tasks[2].files is missing. List the files and globs the task works in.`
 -->
 
 # breadcrumb
@@ -70,7 +75,7 @@ found, then end your turn.`
 **Result (legislator):** `Reopened checkout.4f1a2.b7d05; the user will settle it in its
 Dialogue. Carry on with the rule change.`
 
-**Result (revision):** `Reopened checkout.4f1a2.b7d05.1c2e3; this task is paused until its
+**Result (review):** `Reopened checkout.4f1a2.b7d05.1c2e3; this task is paused until its
 Dialogue settles, and the verdicts you've given are kept. Reopen any other nodes you've
 found, then end your turn.`
 
@@ -333,7 +338,7 @@ Build only.
 
 **Description:** Hands in your task. Monteverdi commits your worktree, applies it onto the
 endeavor branch, and runs the project's checks while you wait. If any fail, the result says
-which and why; fix them and submit again. Once they pass, the task goes on to review and you
+which and why; fix them and submit again. Once they pass, the task goes on to the review session and you
 end your turn.
 
 | Parameter | Type | Description |
@@ -343,12 +348,12 @@ end your turn.
 **Does,** in order, stopping at the first step that fails:
 1. Checks the worktree (below).
 2. Commits it on the task branch and applies the task onto the endeavor branch's tip as one
-   commit, with `message` and the trailers (`Monteverdi-Node:` per node, co-authors). On a
+   commit, with `message` and the trailers (`Monteverdi-Task:`, `Monteverdi-Node:` per node, co-authors). On a
    conflict, leaves the markers in the worktree.
-3. Runs the edit rules and revision commands selected by the changed files, in the worktree,
+3. Runs the edit rules and review commands selected by the changed files, in the worktree,
    at that commit. No time limit; the user can stop a check from the UI, which counts as it
    failing.
-4. Hands the task to review (a revision session, in the same worktree) if any agent revision
+4. Hands the task to a review session (in the same worktree) if any agent review
    rules are selected; otherwise merges it under the endeavor's merge lock, re-applying it
    and re-running step 3 first if the endeavor branch moved.
 
@@ -371,18 +376,18 @@ changed by task 2 (Refund emails), which merged after your task started. The con
 markers are in your worktree; resolve them so both changes work, then submit again.`
 
 **Result on failed checks:** a numbered list headed `2 of 6 checks failed; fix them and submit
-again:`, each item the rule's name and kind, its output trimmed to about 40 lines, and the
+again:`, each item the rule's name and type, its output trimmed to about 40 lines, and the
 path of the full output in the run folder; then `Passed: color-tokens, lint, format, unit.`
 
 ```
-1. typecheck (revision command):
+1. typecheck (review command):
    server/refunds/create.ts(14,7): error TS2322: Type 'string' is not assignable to type 'number'.
    Full output: {run_dir}/submit-2/typecheck.txt
 ```
 
 A stopped check's item ends `Stopped by the user after 14m03s.`
 
-**Result on success:** `All 6 checks passed; the task goes on to review. End your turn;
+**Result on success:** `All 6 checks passed; the task goes on to the review session. End your turn;
 Monteverdi will bring you back if review finds anything.` With no agent rules selected:
 `All 6 checks passed and the task merged. End your turn.`
 
@@ -402,23 +407,24 @@ them to the user if they matter.
 
 | Parameter | Type | Description |
 |---|---|---|
-| `scope` | `"project"` or `"personal"`, default `"project"` | Personal only when the user asks for a rule of their own. |
-| `type` | `"dialogue"`, `"scoping"`, `"build"`, `"edit"` or `"revision"`, required | Which agent or step the rule is for. |
+| `scope` | `"project"` or `"personal"`, default `"project"` | Personal only when the user asks for a rule of their own. Publish rules are always the project's. |
+| `type` | `"dialogue"`, `"scoping"`, `"build"`, `"edit"`, `"review"` or `"publish"`, required | Which agent or step the rule is for. |
 | `name` | string, required | The rule's folder name: lowercase letters, digits and hyphens. |
-| `description` | string, required | When the rule applies, in one sentence. Build rules are chosen by it; for a check, it says what passing means. |
-| `paths` | string[] | Build, edit and revision rules: glob patterns, relative to the repository root, for the files the rule concerns. Without it a check runs on every change, and a build rule is chosen only by its description. |
-| `run` | string | Edit rules and revision commands: the command, run from the repository root. A script in the rule's folder is named by its path from the root, e.g. `node monteverdi/rules/edit/color-tokens/check.mjs`. |
-| `kind` | `"command"` or `"agent"` | Revision rules only. |
+| `description` | string, required | When the rule applies, in one sentence. Build rules are chosen by it; for a check, it says what passing means; for a publish rule, it's the kind of change, as the user picks it. |
+| `steps` | array of `{run}` or `{confirm}` | Publish rules only: the procedure, in order. `run` is a shell command, run from the repository root at the signed-off commit; `confirm` is the text shown while it waits for the user. `[]` for a kind that ships nothing on its own. |
+| `paths` | string[] | Build, edit and review rules: glob patterns, relative to the repository root, for the files the rule concerns. Without it a check runs on every change, and a build rule is chosen only by its description. |
+| `run` | string | Edit rules and review commands: the command, run from the repository root. A review rule with `run` is a command; one without is an agent rule, and its `body` is what the review session carries out. A script in the rule's folder is named by its path from the root, e.g. `node monteverdi/rules/edit/color-tokens/check.mjs`. |
 | `tools` | string[] | Rules an agent reads: MCP servers from the project's `.mcp.json`, or `WebFetch`, `WebSearch`. |
 | `body` | string | Markdown. For guidance and agent rules, what the agent reads, with any `` !`command` `` whose output it should get. Optional for commands. |
 
-**Does:** writes `SKILL.md` in the rule's folder in the legislator's worktree (or its draft
-copy of the personal rules folder). Frontmatter keys this tool doesn't take, already in the
+**Does:** writes `SKILL.md` in the rule's folder in the legislator's worktree (or its worktree
+of the personal rules repo). Frontmatter keys this tool doesn't take, already in the
 file, are kept. Runs each embedded `` !`command` `` once, as it would run when the rule is
 injected.
 
 **Fixed silently:** a leading `./` in `paths`; duplicate entries; a full MCP tool name in
-`tools` (`mcp__playwright__browser_navigate` → `playwright`); trailing whitespace.
+`tools` (`mcp__playwright__browser_navigate` → `playwright`); a step given as a plain string
+(it becomes `{run: "<string>"}`); trailing whitespace.
 
 **Checks and errors.** Every problem at once, as a numbered list headed `The rule has N
 problems; fix them and call write_rule again:`
@@ -427,19 +433,30 @@ problems; fix them and call write_rule again:`
 |---|---|
 | `name` is a slug | `name "Color Tokens" isn't valid: use lowercase letters, digits and hyphens, e.g. color-tokens.` |
 | `description` isn't empty | `description is empty. Say when this rule applies.` |
-| A check that runs has `run` | `edit rules run a command, so they need run.` · `kind: command needs run.` |
-| Revision rules have `kind` | `revision rules need kind: command or agent.` |
-| `kind` only on revision rules | `kind is only for revision rules.` |
-| `run` only on commands | `run is for edit rules and revision commands; a build rule is read, not run.` |
-| `paths` only where something selects by it | `paths is for build, edit and revision rules; every Dialogue rule reaches every Dialogue session.` |
+| Edit rules have `run` | `edit rules run a command, so they need run.` |
+| Review rules have `run` or a body | `A review rule needs run (a command) or a body (instructions for the review session).` |
+| `run` only on commands | `run is for edit rules and review commands; a build rule is read, not run.` |
+| `paths` only where something selects by it | `paths is for build, edit and review rules; every Dialogue rule reaches every Dialogue session.` |
 | `tools` only where an agent reads the rule | `tools is for rules an agent reads; a command can't use MCP servers.` |
 | A body where an agent reads it | `A build rule's body is what the build session reads; it's empty.` |
 | `paths` are valid, relative, inside the repo | `paths: "src/[pages" isn't a valid pattern.` · `paths: "../shared/**" is outside the repository.` |
 | `tools` exist | `tools: no server "playwrite" in .mcp.json. Servers: playwright, postgres.` |
 | A file `run` names in the rule's folder exists | `run names monteverdi/rules/edit/color-tokens/check.mjs, which doesn't exist. Write it with write_rule_file.` |
 | Embedded commands run | The command and its exit code, `It runs whenever this rule is injected, so it has to work:`, then its output. |
+| Publish rules have `steps` | `publish rules need steps; pass [] for a kind that ships nothing on its own.` |
+| `steps` only on publish | `steps is for publish rules.` |
+| Each step is one thing | `steps[3] has both run and confirm; a step is one or the other.` |
+| Steps aren't empty | `steps[2].run is empty.` |
+| No check or agent fields on publish | `paths, run and tools aren't for publish rules: no agent reads them and no file selects them.` |
+| Publish rules are the project's | `Publish rules belong to the project: everyone who signs off uses them. Leave out scope.` |
+| `MONTEVERDI_` variables exist | `steps[2] uses $MONTEVERDI_TITEL; the variables are MONTEVERDI_BASE, MONTEVERDI_CHANGED_FILES, MONTEVERDI_NODES, MONTEVERDI_SIGNOFF, MONTEVERDI_ENDEAVOR, MONTEVERDI_TITLE, MONTEVERDI_SUMMARY, MONTEVERDI_COMPLETE.` |
+| A file in the rule's folder that a step names exists | `steps[1] names monteverdi/rules/publish/hotfix/sync.sh, which doesn't exist. Write it with write_rule_file.` |
 
 **Notes** (written anyway, listed after the result):
+- For a publish rule with no `run` steps: `This kind ships nothing on its own; its endeavors
+  wait for the next procedure that pushes.`
+- For a review rule with both `run` and a body: `This rule has run, so it's a command; its
+  body is for people reading the rule, and no session sees it.`
 - `paths: "src/legacy/**" matches no file today.`
 - `A personal build rule "ui" exists too; this project rule takes its place in this project.`
   (or, for a personal rule, the reverse)
@@ -491,6 +508,7 @@ plans name them), so a rename is a delete and a new rule.
 
 **Errors:**
 - `No edit rule "color-token". Edit rules: color-tokens, no-console.`
+- (publish) `Checkout and Refunds are endeavors of kind feature. The user has to change their kind first.`
 - `color-tokens has no file chek.mjs. Its files: SKILL.md, check.mjs.`
 - `To delete SKILL.md, delete the rule (leave out file).`
 
@@ -508,7 +526,7 @@ you pass, and on the prompting commit when there is one. The user sees every run
 | Parameter | Type | Description |
 |---|---|---|
 | `scope` | `"project"` or `"personal"`, default `"project"` | |
-| `type` | `"edit"` or `"revision"`, required | |
+| `type` | `"edit"` or `"review"`, required | |
 | `name` | string, required | The rule. |
 | `on` | `"current"`, `"sample"` or `"prompting"`, required | `current`: your worktree, the project's signed-off code. `sample`: your worktree plus the files in `files`, removed again afterwards. `prompting`: the commit your first message names, the way `submit` ran it. |
 | `files` | array of `{path, content}` | With `on: "sample"`: files to write for this run, relative to the repository root. They're the changed files the command sees. |
@@ -524,7 +542,7 @@ Code records every run for the user's review.
 
 | Check | Error |
 |---|---|
-| The rule is a command | `ui-check is an agent rule: it can't be run. Read it as the revision session will.` |
+| The rule is a command | `ui-check is an agent rule: it can't be run. Read it as the review session will.` |
 | `files` with `sample` | `on: "sample" needs files.` |
 | A prompting commit exists | `Your first message names no prompting commit. Use current or sample.` |
 | `changed` matches something | `changed: "src/legacy/**" matches no tracked file.` |
@@ -537,9 +555,9 @@ do instead.`
 
 # verdict
 
-Revision only.
+Review only.
 
-**Description:** Gives your verdict on one revision rule. Call it once for every rule in your
+**Description:** Gives your verdict on one review rule. Call it once for every rule in your
 instructions, by name. A rule you give no verdict counts as failed. Calling it again for the
 same rule replaces your earlier verdict.
 
@@ -553,7 +571,7 @@ same rule replaces your earlier verdict.
 | `problems[].what` | string, required | What's wrong, and how you saw it (for a page: what you did and what happened). |
 | `problems[].fix` | string, required | What to do instead. |
 | `suggest_rule` | object | Optional, on a pass or a fail: a rule change that would stop this kind of problem being built, or catch it with a command instead of review. The user decides whether to act on it. |
-| `suggest_rule.type` | `"build"`, `"edit"` or `"revision"`, required | Build to prevent it, edit for a fast per-file check, revision for a slower command. |
+| `suggest_rule.type` | `"build"`, `"edit"` or `"review"`, required | Build to prevent it, edit for a fast per-file check, review for a slower command. |
 | `suggest_rule.name` | string | An existing rule to change. Leave out to suggest a new one. |
 | `suggest_rule.proposal` | string, required | What the rule should say or check, in a sentence or two. Monteverdi attaches this commit and your verdict as the evidence. |
 

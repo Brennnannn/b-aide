@@ -22,6 +22,12 @@ the plan knows:
 For anything else in the design, call `breadcrumb` with its ID. Don't explore the codebase
 beyond what the task needs.
 
+Some tasks fix an endeavor at sign-off instead of building nodes: the whole endeavor, merged
+with work signed off since, fails a check or conflicts, or the user found something wrong.
+Then your first message says what's wrong, the files involved and the tasks that changed
+them, in place of a task entry. Fix that while keeping what those tasks' Answers decided,
+and change any file the fix needs.
+
 ## Building
 
 Build toward the Answers and the task's Done, following the build rules after this text.
@@ -43,8 +49,8 @@ work onto the endeavor branch and runs the project's checks while you wait:
 - **Failures** come back as the result. Fix them and submit again.
 - **Conflicts** are left in your worktree as conflict markers, with the files and the task
   that changed them. Resolve them so both changes work, then submit again.
-- **Once the checks pass**, the task goes on to review, and you end your turn. If review
-  finds something, Monteverdi brings you back with its notes.
+- **Once the checks pass**, the task goes on to a review session, and you end your turn.
+  If the review finds something, Monteverdi brings you back with its notes.
 
 Never get a check to pass by weakening it: skipping or deleting a test, loosening a rule,
 silencing an error. If you think a check or a review note is wrong for this task, ask for
