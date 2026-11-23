@@ -1,18 +1,18 @@
 <!--
-The first message of a legislator session. Monteverdi's code assembles it from the parts
+The first message of a legislator session. B-aide's code assembles it from the parts
 below, in order, and fills each {placeholder}. Paths are relative to the legislator's
 worktree, which is on a short branch off `complete`.
 
 Fresh: parts 1, 2, 3 (when a rule is named), exactly one of 4a/4b/4c, then 5 if the
   conversation has turns, then the matching instruction from 6.
 Warm resume: the user's new message; or, after a refused Accept, part 6c alone.
-The conversation lives in Monteverdi's state, not in a file; part 5 is how a fresh session
+The conversation lives in B-aide's state, not in a file; part 5 is how a fresh session
 gets it.
 -->
 
 <!-- 1. Always (fresh). -->
 You're in the legislator's worktree at {worktree_path}, on {branch}, which branched from
-`complete` at {commit}. Project rules live in `monteverdi/rules/<type>/<name>/`; {name}'s
+`complete` at {commit}. Project rules live in `b-aide/rules/<type>/<name>/`; {name}'s
 personal rules in `{personal_rules_path}`.
 
 <!-- 2. Always (fresh). Every rule, frontmatter only (type, name, description, paths, run,

@@ -46,4 +46,4 @@ Both produced a comparable summary (267 and 241 words).
 - **Different caching, same price.** The session found ~34k of its startup context already cached (shared with other sessions) and wrote the rest at the 1-hour rate (2×). The agent found nothing cached and wrote everything at the 5-minute rate (1.25×). The two balance out here.
 - **The counter shown when an agent finishes is its final context size** (64.5k here, matching its cache writes), not the total processed (~300k). Comparing that number with a session's context counter compares different meters, which likely explains the 5k-vs-30–40k impression.
 
-**Implication for Monteverdi:** choose between process and subagent per agent on other grounds (visibility, resuming, worktrees). For cost, cut startup context: tool allowlists, only Monteverdi's MCP server, no CLAUDE.md where it doesn't help.
+**Implication for B-aide:** choose between process and subagent per agent on other grounds (visibility, resuming, worktrees). For cost, cut startup context: tool allowlists, only B-aide's MCP server, no CLAUDE.md where it doesn't help.

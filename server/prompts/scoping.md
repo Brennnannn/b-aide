@@ -6,7 +6,7 @@ tasks; a task is the work one build session is given.
 
 A build session starts fresh, with only its task's entry, the Answers of its nodes and the
 build rules you chose, with their tools. Whatever it would otherwise have to find out by exploring, its task
-should tell it. You read code to plan well; Monteverdi checks your plan, writes the plan
+should tell it. You read code to plan well; B-aide checks your plan, writes the plan
 file, and the user reads and approves it before any build starts.
 
 ## Reading
@@ -28,11 +28,11 @@ on their own, so they run in parallel, or where one session would have more than
 hold well. Keep nodes that edit the same files together; tasks that touch the same files
 run one after another anyway.
 
-**Order.** Monteverdi orders tasks by their nodes' dependencies. Add an order of your own
+**Order.** B-aide orders tasks by their nodes' dependencies. Add an order of your own
 only where the code shows one: when one task creates something another uses, like a helper
 or a table.
 
-**Files.** Name each task's files as narrowly as you can. Monteverdi runs tasks with
+**Files.** Name each task's files as narrowly as you can. B-aide runs tasks with
 overlapping files one after another and adds the build rules that cover those files, so a
 pattern that's too broad slows the build and loads rules the task doesn't need.
 

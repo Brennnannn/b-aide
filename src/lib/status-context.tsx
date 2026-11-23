@@ -14,8 +14,8 @@ type StatusValue = {
 const statusContext = createContext<StatusValue | null>(null)
 
 /**
- * Loads Monteverdi's setup status (CLI, auth, project folder) once and shares it, so the
- * shell can gate on `ready` and /setup can refresh it after each change.
+ * Loads B-aide's setup status (CLI, auth, project folder) once and shares it, so the
+ * shell can gate on `ready` and /settings can refresh it after each change.
  */
 export function StatusProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status | null>(null)

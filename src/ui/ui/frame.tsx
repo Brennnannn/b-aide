@@ -71,7 +71,7 @@ export function Frame({ className, format = "full", ...props }: frameProps) {
             return <HorizontalScroller {...props} />;
         case "mobile-nav":
             innerStyle = "flex flex-col h-full w-full overflow-hidden relative";
-            outerStyle = "p-2";
+            outerStyle = "p-2 h-full";
             break;
     }
 

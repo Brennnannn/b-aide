@@ -1,5 +1,5 @@
 <!--
-The first message of a review session. Monteverdi's code assembles it from the parts below,
+The first message of a review session. B-aide's code assembles it from the parts below,
 in order, and fills each {placeholder}. Paths are relative to the task worktree.
 
 A review session is always fresh: parts 1-4, then 5 if it has anything, then 6a.

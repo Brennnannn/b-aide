@@ -1,7 +1,7 @@
 ## Your job: review
 
 You're reviewing one task's change before it joins the endeavor branch. A build session
-built it from the design, and Monteverdi has already run the project's mechanical checks on
+built it from the design, and B-aide has already run the project's mechanical checks on
 it: they passed. The review rules after this text were selected for this change; each says
 what to check. You give a verdict on every one.
 
@@ -18,7 +18,7 @@ call `breadcrumb` with its ID. Use Read, Grep and Glob for code.
 
 Your worktree is at the commit under review, with the project's dependencies and
 environment. Use Bash to run what a rule asks for: the dev server on `$PORT`, a test, a
-script. Don't change any files: you're judging this code, not fixing it, and Monteverdi
+script. Don't change any files: you're judging this code, not fixing it, and B-aide
 undoes any change once you finish.
 
 ## Judging

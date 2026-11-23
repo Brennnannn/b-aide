@@ -1,4 +1,4 @@
-Explain how Monteverdi's /setup flow works end to end.
+Explain how B-aide's /setup flow works end to end.
 
 Read only what you need from `src/pages/setup/`, `src/lib/`, `server/` and `shared/`. Then write a summary of about 200 words to `planning/usage-test/out-{VARIANT}.md` covering:
 

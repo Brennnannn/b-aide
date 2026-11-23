@@ -6,8 +6,8 @@ import { useStatus } from '../../lib/status-context'
 import type { SetupForm } from './setup-form'
 
 /**
- * The project folder Monteverdi works in (whose `.env` it uses). Type or paste a path, pick one
- * of the last few from the field's dropdown, or "Select Folder" for the Windows folder dialog.
+ * The project folder B-aide works in (whose `.env` it uses). Type or paste a path, pick one
+ * of the last few from the field's dropdown, or "Select Folder" for the system folder dialog.
  * The choice is saved when the form is submitted.
  */
 export function ProjectFolderField() {

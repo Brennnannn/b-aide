@@ -1,5 +1,5 @@
 <!--
-The first message of a build session. Monteverdi's code assembles it from the parts below,
+The first message of a build session. B-aide's code assembles it from the parts below,
 in order, and fills each {placeholder}. Paths are relative to the task worktree.
 
 Every way a build session comes back goes through one path: resumed with a message if the
@@ -41,7 +41,7 @@ Paths in this message are relative to the worktree.
 <!-- 1f. Fix task (fresh), in place of 1. -->
 Fix {root_title} ({root_id}) for sign-off ({task_id}). You're in the fix's worktree at
 {worktree_path}, on branch {task_branch}, which branched from {endeavor_branch} at {base}.
-{merge: "Monteverdi has started merging {complete} into it; the conflicts are left as
+{merge: "B-aide has started merging {complete} into it; the conflicts are left as
 markers." | ""} Paths in this message are relative to the worktree.
 
 <!-- 2f. Fix task (fresh), in place of 2 and 3. All computed by code. One what's-wrong
@@ -52,7 +52,7 @@ markers." | ""} Paths in this message are relative to the worktree.
        request: the user's words, with the file and line they started from, if any.
      files: git's conflicted files; for a check, every tracked path in its output; for a
        request, its file; if none, the files the endeavor changed.
-     tasks: for each file, the tasks that changed it, from Monteverdi-Task trailers:
+     tasks: for each file, the tasks that changed it, from B-aide-Task trailers:
        ID, subject, nodes (title, ID, summary).
      done: computed. -->
 <fix>
@@ -118,7 +118,7 @@ Carry on with this task from where the work stands, then submit it.
 <!-- 6f. Code escalated: a rule reached escalateAfter failures (3 by default), or failed
      again after that; counts never reset. Usually warm: the session just submitted.
      Code appends each attempt's output since the last escalation to the turn it writes. -->
-{rule} has failed {count} times, so Monteverdi has {first: "opened this task's Dialogue" |
+{rule} has failed {count} times, so B-aide has {first: "opened this task's Dialogue" |
 again: "brought it back to this task's Dialogue"} with {name}. Write a turn with `reply`:
 what keeps failing, what you've tried, what you think the cause is, and what you need from
 {name}. Then end your turn.

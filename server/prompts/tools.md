@@ -1,5 +1,5 @@
 <!--
-Monteverdi's MCP tools as every agent sees them: each tool's description and its parameters' descriptions (the model reads these), what
+B-aide's MCP tools as every agent sees them: each tool's description and its parameters' descriptions (the model reads these), what
 code checks, and the wording of what comes back. The system text says when and why to use
 each tool; this says what it takes.
 
@@ -80,7 +80,7 @@ Dialogue settles, and the verdicts you've given are kept. Reopen any other nodes
 found, then end your turn.`
 
 **Result (build, its task):** `Opened this task's Dialogue with your reason. End your turn;
-Monteverdi will bring you back with the user's reply.`
+B-aide will bring you back with the user's reply.`
 
 **Errors:**
 - `No node checkout.4f1a2.zzzzz. Its nearest existing ancestor is checkout.4f1a2.`
@@ -92,8 +92,8 @@ Monteverdi will bring you back with the user's reply.`
 
 Scoping only.
 
-**Description:** Submits the build plan. Monteverdi checks the whole plan and returns every
-problem at once; fix them and submit the whole plan again. On success Monteverdi writes the
+**Description:** Submits the build plan. B-aide checks the whole plan and returns every
+problem at once; fix them and submit the whole plan again. On success B-aide writes the
 plan file for the user to approve.
 
 | Parameter | Type | Description |
@@ -109,7 +109,7 @@ plan file for the user to approve.
 | `tasks[].reuse[].path` | string, required | A file or folder that exists now, relative to the repository root. |
 | `tasks[].reuse[].use` | string, required | What to use from it and for what, naming functions, components or types. |
 | `tasks[].done` | string, required | What to check before submitting the task: observable results, including what later tasks rely on. |
-| `response` | string | Only when revising after feedback: what you changed in reply and, for any point you didn't follow, why. Monteverdi shows it under the feedback. |
+| `response` | string | Only when revising after feedback: what you changed in reply and, for any point you didn't follow, why. B-aide shows it under the feedback. |
 
 **Fixed silently** (one possible meaning): a rule the task's `files` would bring anyway; a
 leading `./`; duplicate entries.
@@ -142,7 +142,7 @@ has N problems; fix them and submit the whole plan again:`
 Dialogue, build and legislator; the description, parameters and result are worded per role.
 
 **Description (dialogue):** Posts your turn in this Dialogue. Call it once, at the end of your
-turn, with your whole answer, then end your turn. Monteverdi writes it into the Dialogue file
+turn, with your whole answer, then end your turn. B-aide writes it into the Dialogue file
 under your name.
 
 **Description (build):** Posts your turn in your task's Dialogue with the user. Only while your
@@ -157,7 +157,7 @@ turn, then end your turn. Your last reply before the user accepts becomes the co
 | `message` | string, required | Your turn, in Markdown. Bold and lists for structure; no headings (they're reserved for the design's nodes). |
 | `findings` | string | Dialogue and build only. What you learned exploring that bears on the decision and that someone starting from the file alone would need: file paths, constraints, approaches you ruled out and why. Shown collapsed under your turn. |
 
-The legislator's `reply` has no `findings`: its conversation is kept in Monteverdi's state,
+The legislator's `reply` has no `findings`: its conversation is kept in B-aide's state,
 and the commit is the lasting record. Build sessions get `reply` from the start (adding a
 tool mid-session would break the cache) and it's refused until the task's Dialogue is open.
 
@@ -206,7 +206,7 @@ Answer:` then the file.
 
 Dialogue only.
 
-**Description:** Condenses this Dialogue into the node's Answer and closes it. Monteverdi
+**Description:** Condenses this Dialogue into the node's Answer and closes it. B-aide
 commits the Dialogue as it stands, writes the Answer into the node, deletes the Dialogue file
 and commits again.
 
@@ -312,7 +312,7 @@ still in server/refunds/ (from its build); say in a child's explanation what hap
 
 Dialogue only.
 
-**Description:** Closes this Dialogue with the node split into its children. Monteverdi
+**Description:** Closes this Dialogue with the node split into its children. B-aide
 commits the Dialogue as it stands, writes the explanation, deletes the Dialogue file and
 commits again, children and their seeds included.
 
@@ -336,19 +336,19 @@ is committed and closed. End your turn.`
 
 Build only.
 
-**Description:** Hands in your task. Monteverdi commits your worktree, applies it onto the
+**Description:** Hands in your task. B-aide commits your worktree, applies it onto the
 endeavor branch, and runs the project's checks while you wait. If any fail, the result says
 which and why; fix them and submit again. Once they pass, the task goes on to the review session and you
 end your turn.
 
 | Parameter | Type | Description |
 |---|---|---|
-| `message` | string, required | The commit message for the task: a subject line, then optionally a blank line and a body for what a later reader needs that the Answers don't say. Follow the project's conventions for commit messages if it has any. Monteverdi adds the trailers. |
+| `message` | string, required | The commit message for the task: a subject line, then optionally a blank line and a body for what a later reader needs that the Answers don't say. Follow the project's conventions for commit messages if it has any. B-aide adds the trailers. |
 
 **Does,** in order, stopping at the first step that fails:
 1. Checks the worktree (below).
 2. Commits it on the task branch and applies the task onto the endeavor branch's tip as one
-   commit, with `message` and the trailers (`Monteverdi-Task:`, `Monteverdi-Node:` per node, co-authors). On a
+   commit, with `message` and the trailers (`B-aide-Task:`, `B-aide-Node:` per node, co-authors). On a
    conflict, leaves the markers in the worktree.
 3. Runs the edit rules and review commands selected by the changed files, in the worktree,
    at that commit. No time limit; the user can stop a check from the UI, which counts as it
@@ -366,7 +366,7 @@ end your turn.
 |---|---|
 | `message` has a subject | `message is empty. Write a commit message for the task.` |
 | Something changed | `Nothing has changed since this task started (3f9c2a1). Build the task, then submit.` |
-| Nothing under `monteverdi/` changed | `You changed files under monteverdi/: monteverdi/endeavors/checkout/checkout.4f1a2.md. Monteverdi's files change only through its tools, so restore them (git checkout -- <path>). If the design is wrong, call reopen on its node.` |
+| Nothing under `b-aide/` changed | `You changed files under b-aide/: b-aide/endeavors/checkout/checkout.4f1a2.md. B-aide's files change only through its tools, so restore them (git checkout -- <path>). If the design is wrong, call reopen on its node.` |
 | No conflict markers left | `server/routes.ts still has conflict markers (lines 40-52). Resolve them, then submit again.` |
 | No `reopen` earlier this run | `This task is paused by your reopen, so there's nothing to submit. End your turn.` |
 | Not already in review | `This task is already in review. End your turn.` |
@@ -388,7 +388,7 @@ path of the full output in the run folder; then `Passed: color-tokens, lint, for
 A stopped check's item ends `Stopped by the user after 14m03s.`
 
 **Result on success:** `All 6 checks passed; the task goes on to the review session. End your turn;
-Monteverdi will bring you back if review finds anything.` With no agent rules selected:
+B-aide will bring you back if review finds anything.` With no agent rules selected:
 `All 6 checks passed and the task merged. End your turn.`
 
 **Note, on any result after the checks ran,** when the task changed files outside its `files`
@@ -401,7 +401,7 @@ the work needs there.`
 Legislator only.
 
 **Description:** Writes a rule's `SKILL.md`, creating the rule if it's new. Pass the whole
-frontmatter and body: they replace what's there. Monteverdi checks it and returns every
+frontmatter and body: they replace what's there. B-aide checks it and returns every
 problem at once; fix them and call again. Notes in the result are written anyway; mention
 them to the user if they matter.
 
@@ -413,7 +413,7 @@ them to the user if they matter.
 | `description` | string, required | When the rule applies, in one sentence. Build rules are chosen by it; for a check, it says what passing means; for a publish rule, it's the kind of change, as the user picks it. |
 | `steps` | array of `{run}` or `{confirm}` | Publish rules only: the procedure, in order. `run` is a shell command, run from the repository root at the signed-off commit; `confirm` is the text shown while it waits for the user. `[]` for a kind that ships nothing on its own. |
 | `paths` | string[] | Build, edit and review rules: glob patterns, relative to the repository root, for the files the rule concerns. Without it a check runs on every change, and a build rule is chosen only by its description. |
-| `run` | string | Edit rules and review commands: the command, run from the repository root. A review rule with `run` is a command; one without is an agent rule, and its `body` is what the review session carries out. A script in the rule's folder is named by its path from the root, e.g. `node monteverdi/rules/edit/color-tokens/check.mjs`. |
+| `run` | string | Edit rules and review commands: the command, run from the repository root. A review rule with `run` is a command; one without is an agent rule, and its `body` is what the review session carries out. A script in the rule's folder is named by its path from the root, e.g. `node b-aide/rules/edit/color-tokens/check.mjs`. |
 | `tools` | string[] | Rules an agent reads: MCP servers from the project's `.mcp.json`, or `WebFetch`, `WebSearch`. |
 | `body` | string | Markdown. For guidance and agent rules, what the agent reads, with any `` !`command` `` whose output it should get. Optional for commands. |
 
@@ -441,7 +441,7 @@ problems; fix them and call write_rule again:`
 | A body where an agent reads it | `A build rule's body is what the build session reads; it's empty.` |
 | `paths` are valid, relative, inside the repo | `paths: "src/[pages" isn't a valid pattern.` · `paths: "../shared/**" is outside the repository.` |
 | `tools` exist | `tools: no server "playwrite" in .mcp.json. Servers: playwright, postgres.` |
-| A file `run` names in the rule's folder exists | `run names monteverdi/rules/edit/color-tokens/check.mjs, which doesn't exist. Write it with write_rule_file.` |
+| A file `run` names in the rule's folder exists | `run names b-aide/rules/edit/color-tokens/check.mjs, which doesn't exist. Write it with write_rule_file.` |
 | Embedded commands run | The command and its exit code, `It runs whenever this rule is injected, so it has to work:`, then its output. |
 | Publish rules have `steps` | `publish rules need steps; pass [] for a kind that ships nothing on its own.` |
 | `steps` only on publish | `steps is for publish rules.` |
@@ -449,8 +449,8 @@ problems; fix them and call write_rule again:`
 | Steps aren't empty | `steps[2].run is empty.` |
 | No check or agent fields on publish | `paths, run and tools aren't for publish rules: no agent reads them and no file selects them.` |
 | Publish rules are the project's | `Publish rules belong to the project: everyone who signs off uses them. Leave out scope.` |
-| `MONTEVERDI_` variables exist | `steps[2] uses $MONTEVERDI_TITEL; the variables are MONTEVERDI_BASE, MONTEVERDI_CHANGED_FILES, MONTEVERDI_NODES, MONTEVERDI_SIGNOFF, MONTEVERDI_ENDEAVOR, MONTEVERDI_TITLE, MONTEVERDI_SUMMARY, MONTEVERDI_COMPLETE.` |
-| A file in the rule's folder that a step names exists | `steps[1] names monteverdi/rules/publish/hotfix/sync.sh, which doesn't exist. Write it with write_rule_file.` |
+| `B_AIDE_` variables exist | `steps[2] uses $B_AIDE_TITEL; the variables are B_AIDE_BASE, B_AIDE_CHANGED_FILES, B_AIDE_NODES, B_AIDE_SIGNOFF, B_AIDE_ENDEAVOR, B_AIDE_TITLE, B_AIDE_SUMMARY, B_AIDE_COMPLETE.` |
+| A file in the rule's folder that a step names exists | `steps[1] names b-aide/rules/publish/hotfix/sync.sh, which doesn't exist. Write it with write_rule_file.` |
 
 **Notes** (written anyway, listed after the result):
 - For a publish rule with no `run` steps: `This kind ships nothing on its own; its endeavors
@@ -463,7 +463,7 @@ problems; fix them and call write_rule again:`
 - For a rule with embedded commands: what each printed, so the user sees what the agent will
   get.
 
-**Result:** `Wrote monteverdi/rules/edit/color-tokens/SKILL.md.` Then any notes.
+**Result:** `Wrote b-aide/rules/edit/color-tokens/SKILL.md.` Then any notes.
 
 # write_rule_file
 
@@ -489,7 +489,7 @@ its body points to. Pass the whole content. The rule must exist; write its `SKIL
 | Inside the rule's folder | `path "../ui/x.mjs" is outside the rule's folder.` |
 | Not `SKILL.md` | `SKILL.md is written with write_rule.` |
 
-**Result:** `Wrote monteverdi/rules/edit/color-tokens/check.mjs.` If the rule's command
+**Result:** `Wrote b-aide/rules/edit/color-tokens/check.mjs.` If the rule's command
 names this file: `Not tried since this change.`
 
 # delete_rule
@@ -519,7 +519,7 @@ plans name them), so a rename is a delete and a new rule.
 
 Legislator only.
 
-**Description:** Runs a check's command the way Monteverdi will, with your current version of
+**Description:** Runs a check's command the way B-aide will, with your current version of
 the rule, and returns its exit code and output. Run it on the current code, on sample files
 you pass, and on the prompting commit when there is one. The user sees every run.
 
@@ -573,7 +573,7 @@ same rule replaces your earlier verdict.
 | `suggest_rule` | object | Optional, on a pass or a fail: a rule change that would stop this kind of problem being built, or catch it with a command instead of review. The user decides whether to act on it. |
 | `suggest_rule.type` | `"build"`, `"edit"` or `"review"`, required | Build to prevent it, edit for a fast per-file check, review for a slower command. |
 | `suggest_rule.name` | string | An existing rule to change. Leave out to suggest a new one. |
-| `suggest_rule.proposal` | string, required | What the rule should say or check, in a sentence or two. Monteverdi attaches this commit and your verdict as the evidence. |
+| `suggest_rule.proposal` | string, required | What the rule should say or check, in a sentence or two. B-aide attaches this commit and your verdict as the evidence. |
 
 **Does:** records the verdict against the task's commit. Once every rule has one, code sends
 the failures (each problem as `file:line: what. Fix: fix`) back to the build session, or
@@ -581,7 +581,7 @@ merges the task if all pass. A suggestion goes to the user's review log with its
 
 **Fixed silently:** trailing whitespace; a leading `./` in `file`; `problems` given on a pass
 (dropped, with a note in the result); a full rule path in `suggest_rule.name`
-(`monteverdi/rules/build/ui` → `ui`).
+(`b-aide/rules/build/ui` → `ui`).
 
 **Checks and errors** (every problem at once, headed `The verdict wasn't recorded; N
 problems:`):

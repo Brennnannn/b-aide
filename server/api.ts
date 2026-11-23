@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import path from 'node:path'
 import type { Plugin } from 'vite'
 import type { Status } from '../shared/api-types'
 import { authStatus, cliVersion, findClaudeCli, logout, startLogin } from './claude-cli'
@@ -20,7 +21,7 @@ async function readJson<T>(req: IncomingMessage): Promise<T> {
 async function status(): Promise<Status> {
   const bin = await findClaudeCli()
   const [version, auth] = bin ? await Promise.all([cliVersion(bin), authStatus(bin)]) : [null, null]
-  const { projectDir, recentDirs = [] } = readConfig()
+  const { projectDir, recentDirs = [], projects = [] } = readConfig()
   const project = projectDir
     ? { dir: projectDir, exists: isDirectory(projectDir), hasEnv: hasEnvFile(projectDir) }
     : null
@@ -30,6 +31,7 @@ async function status(): Promise<Status> {
     auth,
     project,
     recentDirs: recentDirs.filter(isDirectory),
+    projects: projects.filter(isDirectory).map((dir) => ({ dir, name: path.basename(dir) })),
     ready: Boolean(auth?.loggedIn && project?.exists),
   }
 }
@@ -72,19 +74,22 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
 }
 
 /**
- * Monteverdi's local API, mounted on the Vite dev/preview server under `/api`. The browser
- * can't run the Claude CLI or read the filesystem, so those live here.
+ * B-aide's local API: Connect-style middleware that answers `/api/*` and passes everything else
+ * on. The renderer can't run the Claude CLI or read the filesystem, so those live here. It runs
+ * in the Electron main process: mounted on Vite in dev, on the static server in production.
  */
-export function monteverdiApi(): Plugin {
-  const middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
-    if (!req.url?.startsWith('/api/')) return next()
-    handle(req, res).catch((error: unknown) =>
-      send(res, 500, { error: error instanceof Error ? error.message : String(error) }),
-    )
-  }
+export function apiMiddleware(req: IncomingMessage, res: ServerResponse, next: () => void) {
+  if (!req.url?.startsWith('/api/')) return next()
+  handle(req, res).catch((error: unknown) =>
+    send(res, 500, { error: error instanceof Error ? error.message : String(error) }),
+  )
+}
+
+/** Mounts `apiMiddleware` on the Vite dev and preview servers. */
+export function localApi(): Plugin {
   return {
-    name: 'monteverdi-api',
-    configureServer: (server) => void server.middlewares.use(middleware),
-    configurePreviewServer: (server) => void server.middlewares.use(middleware),
+    name: 'b-aide-api',
+    configureServer: (server) => void server.middlewares.use(apiMiddleware),
+    configurePreviewServer: (server) => void server.middlewares.use(apiMiddleware),
   }
 }

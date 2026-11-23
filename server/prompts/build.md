@@ -34,23 +34,23 @@ Build toward the Answers and the task's Done, following the build rules after th
 Your worktree has the project's dependencies and environment: run its commands (a
 typecheck, a test file, the dev server on `$PORT`) whenever seeing the result helps.
 
-After some edits, Monteverdi runs the project's edit checks on the file you changed and
+After some edits, B-aide runs the project's edit checks on the file you changed and
 shows you any failure. Fix it while the file is in front of you, then carry on.
 
-Leave git to Monteverdi: don't commit, branch, rebase, stash or push. It commits your work
+Leave git to B-aide: don't commit, branch, rebase, stash or push. It commits your work
 when you submit. Looking with `git diff` or `git log` is fine. Don't change files under
-`monteverdi/`; the design changes only through `reopen`.
+`b-aide/`; the design changes only through `reopen`.
 
 ## Submitting
 
-When Done holds, call `submit` with a commit message for the task. Monteverdi applies your
+When Done holds, call `submit` with a commit message for the task. B-aide applies your
 work onto the endeavor branch and runs the project's checks while you wait:
 
 - **Failures** come back as the result. Fix them and submit again.
 - **Conflicts** are left in your worktree as conflict markers, with the files and the task
   that changed them. Resolve them so both changes work, then submit again.
 - **Once the checks pass**, the task goes on to a review session, and you end your turn.
-  If the review finds something, Monteverdi brings you back with its notes.
+  If the review finds something, B-aide brings you back with its notes.
 
 Never get a check to pass by weakening it: skipping or deleting a test, loosening a rule,
 silencing an error. If you think a check or a review note is wrong for this task, ask for
@@ -68,7 +68,7 @@ requires, and submit again.
 Call `reopen` with your task's ID when you're stuck in a way the user has to settle: a
 rule or review note that seems wrong for this task, a check failing for reasons outside
 your code (a flaky test, a broken environment), or a conflict you can't resolve. This
-opens a Dialogue on the task. Then end your turn; Monteverdi brings you back with the
+opens a Dialogue on the task. Then end your turn; B-aide brings you back with the
 user's reply. In that Dialogue, answer with `reply`. Once the user has said what to do,
 do it and submit again.
 

@@ -32,8 +32,8 @@ export function tracePath<TMeta>(item: PathItem<TMeta>): PathItem<TMeta>[] {
 
 /**
  * Renders a breadcrumb path bar for tree navigation.
- * Displays a home icon for the root node and clickable path segments for each ancestor.
- * Shows "No path selected" when the current node is the root (no parent).
+ * Displays a home icon for the root node (its name as the tooltip) and a clickable segment for
+ * every level below it, down to `path` itself. At the root, the bar is just the home icon.
  *
  * @param {PathItem<TMeta>} path - The currently active node in the path tree
  * @param {(item: PathItem<TMeta>) => void} setPath - Called when the user clicks a breadcrumb segment
@@ -52,30 +52,31 @@ export function ExplorerHeader<TMeta = unknown>({
         <div className="flex gap-2">
             <div className="flex-1">
                 <div className="relative">
-                    <div className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-1 focus:ring-primary focus:border-transparent min-h-[42px] flex items-center flex-wrap gap-1">
-                        {!path.parent ? (
-                            <span className="text-text-muted text-sm">No path selected</span>
-                        ) : (
-                            tracePath(path).map((item, index) => (
-                                index == 0 ? (
-                                    <Home
-                                        key={index}
+                    <div className="w-full pl-10 pr-4 py-2 border border-trim rounded-lg focus:ring-1 focus:ring-primary focus:border-transparent min-h-[42px] flex items-center flex-wrap gap-1">
+                        {tracePath(path).map((item, index) => (
+                            index == 0 ? (
+                                <button
+                                    key={index}
+                                    type="button"
+                                    onClick={() => setPath(item)}
+                                    title={item.name}
+                                    className='absolute left-3 top-1/2 transform -translate-y-1/2 text-text-muted cursor-pointer hover:text-primary transition-colors'
+                                >
+                                    <Home className='h-5 w-5' />
+                                </button>
+                            ) : (
+                                <div key={index} className="flex items-center">
+                                    <span className="text-text-muted mx-1">/</span>
+                                    <button
+                                        type="button"
                                         onClick={() => setPath(item)}
-                                        className='absolute left-3 top-1/2 transform -translate-y-1/2 text-text-muted h-5 w-5 cursor-pointer hover:text-primary transition-colors'
-                                    />
-                                ) : (
-                                    <div key={index} className="flex items-center">
-                                        <span className="text-text-muted mx-1">/</span>
-                                        <button
-                                            onClick={() => setPath(item)}
-                                            className="px-2 py-1 rounded hover:bg-hover-1 transition-colors cursor-pointer text-sm font-medium"
-                                        >
-                                            {item.name}
-                                        </button>
-                                    </div>
-                                )
-                            ))
-                        )}
+                                        className="px-2 py-1 rounded hover:bg-hover-1 transition-colors cursor-pointer text-sm font-medium"
+                                    >
+                                        {item.name}
+                                    </button>
+                                </div>
+                            )
+                        ))}
                     </div>
                 </div>
             </div>

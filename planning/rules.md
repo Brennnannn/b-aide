@@ -1,6 +1,6 @@
-# Monteverdi rules
+# B-aide rules
 
-Draft, 2026-11-10; rule types revised 2026-11-17. Rules are how a project tells Monteverdi's agents how to design, plan and build, and what to check. Terms are defined in [language.md](language.md); agents in [agents.md](agents.md).
+Draft, 2026-11-10; rule types revised 2026-11-17. Rules are how a project tells B-aide's agents how to design, plan and build, and what to check. Terms are defined in [language.md](language.md); agents in [agents.md](agents.md).
 
 ## The principle: compute what can be computed
 
@@ -42,7 +42,7 @@ At `submit`, edit rules run before review rules: they're cheap, and a review ses
 Rules live in the repo, versioned with the code. Each rule is a standard skill folder: a `SKILL.md` with frontmatter, plus any scripts or examples it needs.
 
 ```
-monteverdi/
+b-aide/
   endeavors/
   rules/
     dialogue/
@@ -72,18 +72,18 @@ monteverdi/
 
 Being skills, the same rules also work as ordinary skills in your own Claude Code sessions.
 
-**How many rules is up to you.** Dialogue and scoping rules are all injected, and every injected rule costs context on every call; edit rules all run after matching edits. Monteverdi doesn't limit them. If sessions get slow or expensive, remove or shorten rules.
+**How many rules is up to you.** Dialogue and scoping rules are all injected, and every injected rule costs context on every call; edit rules all run after matching edits. B-aide doesn't limit them. If sessions get slow or expensive, remove or shorten rules.
 
-**Personal rules** live in `~/.monteverdi/rules/<type>/` (same folders, same format) and apply to every project. Monteverdi reads both locations; when a personal rule and a project rule of the same type share a name, the project's wins. Personal rules aren't in the repo, so anyone else on the project doesn't get them; to keep history honest, each verdict records the rule's source (`project` or `personal`). The UI shows where a personal rule is shadowed by a project rule of the same name, so a collision is never silent. **The folder is a local git repo of its own** (decided 2026-11-19), created the first time you make a personal rule: nothing goes to a remote, but the legislator handles personal rules exactly like project rules (a branch, a worktree, and Accept fast-forwarding it), and your own rules get history.
+**Personal rules** live in `~/.b-aide/rules/<type>/` (same folders, same format) and apply to every project. B-aide reads both locations; when a personal rule and a project rule of the same type share a name, the project's wins. Personal rules aren't in the repo, so anyone else on the project doesn't get them; to keep history honest, each verdict records the rule's source (`project` or `personal`). The UI shows where a personal rule is shadowed by a project rule of the same name, so a collision is never silent. **The folder is a local git repo of its own** (decided 2026-11-19), created the first time you make a personal rule: nothing goes to a remote, but the legislator handles personal rules exactly like project rules (a branch, a worktree, and Accept fast-forwarding it), and your own rules get history.
 
-**Your working style is a personal rule.** There's no separate editable base prompt: each agent's instructions are Monteverdi's fixed layer (code) followed by its rules, and how you like to work goes in a personal rule of that step's type, e.g. `~/.monteverdi/rules/dialogue/my-style/`. Only Dialogue and scoping take a style; build sessions follow build rules once you press Build plan, and review is checks, not style.
+**Your working style is a personal rule.** There's no separate editable base prompt: each agent's instructions are B-aide's fixed layer (code) followed by its rules, and how you like to work goes in a personal rule of that step's type, e.g. `~/.b-aide/rules/dialogue/my-style/`. Only Dialogue and scoping take a style; build sessions follow build rules once you press Build plan, and review is checks, not style.
 
 ## Injected, not invoked
 
 Dialogue, scoping, build and agent review rules all reach their agent the same way:
 
-- **Injected:** Monteverdi puts the rule's full text into the agent's instructions (after its fixed text, in the file passed with `--system-prompt-file`; see [agents.md](agents.md#configuring-any-agent)), rather than loading it as a skill. A skill's body only loads if the model decides to invoke it, and models sometimes don't; injected text is always in context, and cached.
-- **Embedded commands:** a skill can contain `` !`command` ``, which Claude Code runs when the skill loads, pasting the output in. Injection bypasses that, so **Monteverdi runs those commands itself** when it starts the agent and injects their output. The agent gets current facts (the token list, the database schema) without having to fetch them.
+- **Injected:** B-aide puts the rule's full text into the agent's instructions (after its fixed text, in the file passed with `--system-prompt-file`; see [agents.md](agents.md#configuring-any-agent)), rather than loading it as a skill. A skill's body only loads if the model decides to invoke it, and models sometimes don't; injected text is always in context, and cached.
+- **Embedded commands:** a skill can contain `` !`command` ``, which Claude Code runs when the skill loads, pasting the output in. Injection bypasses that, so **B-aide runs those commands itself** when it starts the agent and injects their output. The agent gets current facts (the token list, the database schema) without having to fetch them.
 
 ## Tools
 
@@ -99,8 +99,8 @@ tools: [playwright]
 The dev server's port is in `$PORT`. Check each changed page at 375px and 1280px wide. ...
 ```
 
-- **What `tools:` names:** MCP servers from the project's `.mcp.json` (Claude Code's standard file at the repo root, the one your own sessions load), and Claude Code's built-in tools by name (`WebFetch`, `WebSearch`). A personal rule may also name one of your user-scope servers (the ones you add with `claude mcp add --scope user`): code reads its definition from the `mcpServers` key of Claude Code's own config, `~/.claude.json`, which has the same shape as `.mcp.json` (decided 2026-11-19). It has to: every agent runs with `--strict-mcp-config`, which loads only the servers in the run's `mcp.json`, because Claude Code would otherwise load all of your servers and claude.ai connectors in every session. The project's `.mcp.json` wins on a name clash. The format is Claude Code's and undocumented, so if code can't read it, the step check says so; a file of Monteverdi's own (`~/.monteverdi/mcp.json`) is the fallback if that format ever changes. Monteverdi keeps no list of its own: the repo already says what servers it has and how to start them.
-- **A session loads the union of its rules' tools.** For a build session, the rules in its task; for a review session, its selected agent rules (`ui-check` needs the browser); for Dialogue and scoping, all of theirs, since they're all injected. Code copies each named server's definition from `.mcp.json` into the run's MCP config (with Monteverdi's own server, under `--strict-mcp-config`), adds `mcp__<server>__*` to `--allowedTools` so a headless run never waits on a prompt, and adds built-in names to `--tools`.
+- **What `tools:` names:** MCP servers from the project's `.mcp.json` (Claude Code's standard file at the repo root, the one your own sessions load), and Claude Code's built-in tools by name (`WebFetch`, `WebSearch`). A personal rule may also name one of your user-scope servers (the ones you add with `claude mcp add --scope user`): code reads its definition from the `mcpServers` key of Claude Code's own config, `~/.claude.json`, which has the same shape as `.mcp.json` (decided 2026-11-19). It has to: every agent runs with `--strict-mcp-config`, which loads only the servers in the run's `mcp.json`, because Claude Code would otherwise load all of your servers and claude.ai connectors in every session. The project's `.mcp.json` wins on a name clash. The format is Claude Code's and undocumented, so if code can't read it, the step check says so; a file of B-aide's own (`~/.b-aide/mcp.json`) is the fallback if that format ever changes. B-aide keeps no list of its own: the repo already says what servers it has and how to start them.
+- **A session loads the union of its rules' tools.** For a build session, the rules in its task; for a review session, its selected agent rules (`ui-check` needs the browser); for Dialogue and scoping, all of theirs, since they're all injected. Code copies each named server's definition from `.mcp.json` into the run's MCP config (with B-aide's own server, under `--strict-mcp-config`), adds `mcp__<server>__*` to `--allowedTools` so a headless run never waits on a prompt, and adds built-in names to `--tools`.
 - **Rules, not a catalog, because a server has no description.** `.mcp.json` says how to start a server, not when a task needs it. The rule says when (its description) and how to use it here (its body); the server's own tool descriptions say what each tool takes. A project that wants builds to use a browser writes one short build rule for it.
 - **A skill's tools.** A skill chosen as a build rule brings the servers its own `allowed-tools` names (Claude Code's field; `mcp__playwright__browser_navigate` can only mean the `playwright` server), plus any `tools:` key added to its frontmatter. A skill that already pre-approves a server's tools needs no edit.
 - **Checked before a step starts.** A rule naming a server that isn't in `.mcp.json` (or your user scope, for a personal rule), or a built-in that doesn't exist, keeps that step from starting, and the UI names the rule and the tool. For build rules that means Plan build isn't available, since the scoping session couldn't fix it.
@@ -109,7 +109,7 @@ The dev server's port is in `$PORT`. Check each changed page at 375px and 1280px
 
 ## Dialogue rules
 
-How this project likes designs worked out. **Monteverdi injects every Dialogue rule into every Dialogue session; nothing selects them.**
+How this project likes designs worked out. **B-aide injects every Dialogue rule into every Dialogue session; nothing selects them.**
 
 ```markdown
 ---
@@ -127,7 +127,7 @@ before writing the Answer. Name the existing @ui components it will use.
 
 ## Scoping rules
 
-Where to look before deciding how to build. **Monteverdi injects every scoping rule into the scoping session; nothing selects them.** The scoping session acts on what they point to and writes the result into each task's **Reuse** field, so the build session gets the findings, not the search.
+Where to look before deciding how to build. **B-aide injects every scoping rule into the scoping session; nothing selects them.** The scoping session acts on what they point to and writes the result into each task's **Reuse** field, so the build session gets the findings, not the search.
 
 ```markdown
 ---
@@ -146,7 +146,7 @@ to the task and list the components the task should reuse, with their paths.
 
 ## Build rules
 
-Guidance for building. **The scoping session chooses them (code adds those whose `paths` match a task's `files`); Monteverdi injects them into the build session.**
+Guidance for building. **The scoping session chooses them (code adds those whose `paths` match a task's `files`); B-aide injects them into the build session.**
 
 ```markdown
 ---
@@ -157,32 +157,32 @@ paths: ["src/**/*.tsx"]
 Use theme tokens from `src/index.css`, never raw colors. ...
 
 Current tokens:
-!`node monteverdi/rules/build/ui/list-tokens.mjs`
+!`node b-aide/rules/build/ui/list-tokens.mjs`
 ```
 
 - **Choosing:** the scoping session reads only the frontmatter of every build rule. `description` says when the rule applies; `paths` says which files it concerns, and code adds a rule automatically when its `paths` match a task's `files`. The chosen rules go in each task's entry in `<id>.build.md`, next to the tools that task needs.
 - **Tools:** a build rule can declare `tools:` (see [Tools](#tools)); choosing the rule brings them into the build session. The scoping session chooses rules, never tools directly.
-- **Skills are offered too** (decided 2026-11-18). Code lists the repo's skills (`.claude/skills/*/SKILL.md`, Claude Code's project skills folder) and your personal ones (`~/.claude/skills/`) next to the build rules, by name and description, and the scoping session can choose them for a task like any build rule. A chosen skill is injected like a build rule (not loaded as a Claude Code skill, which the model might not invoke), with one line saying where its folder is so its relative paths still work. Skills have no `paths`, so one is never added automatically: a "deploy to staging" skill is simply never chosen. On a name clash, a build rule (project, then personal) wins over a skill (repo, then personal): the rule is the version written for Monteverdi. **Skills reach build sessions only**, as the scoping session chooses: no other agent has one choosing guidance by description, and an agent review rule owes a verdict, so which ones run must be deliberate, not every skill in the repo. A project that wants a skill's text in another step writes a rule of that type that embeds it (`` !`cat .claude/skills/code-review/SKILL.md` ``), with no new mechanism.
+- **Skills are offered too** (decided 2026-11-18). Code lists the repo's skills (`.claude/skills/*/SKILL.md`, Claude Code's project skills folder) and your personal ones (`~/.claude/skills/`) next to the build rules, by name and description, and the scoping session can choose them for a task like any build rule. A chosen skill is injected like a build rule (not loaded as a Claude Code skill, which the model might not invoke), with one line saying where its folder is so its relative paths still work. Skills have no `paths`, so one is never added automatically: a "deploy to staging" skill is simply never chosen. On a name clash, a build rule (project, then personal) wins over a skill (repo, then personal): the rule is the version written for B-aide. **Skills reach build sessions only**, as the scoping session chooses: no other agent has one choosing guidance by description, and an agent review rule owes a verdict, so which ones run must be deliberate, not every skill in the repo. A project that wants a skill's text in another step writes a rule of that type that embeds it (`` !`cat .claude/skills/code-review/SKILL.md` ``), with no new mechanism.
 - **Pure guidance.** An instruction like "run tsc after editing" is followed at the model's discretion. Anything required becomes an edit or review rule.
 
 ## Edit rules
 
-Fast mechanical checks that run **while the build session works**, and again at review. **Monteverdi's code attaches every edit rule to every build session; the scoping session doesn't choose them.**
+Fast mechanical checks that run **while the build session works**, and again at review. **B-aide's code attaches every edit rule to every build session; the scoping session doesn't choose them.**
 
 ```markdown
 ---
 name: color-tokens
 description: Colors in changed UI code come from theme tokens, and the theme doesn't redefine Tailwind defaults.
-run: node monteverdi/rules/edit/color-tokens/check.mjs
+run: node b-aide/rules/edit/color-tokens/check.mjs
 paths: ["src/**/*.tsx", "src/**/*.css"]
 ---
 ```
 
 - **Commands only.** An edit rule is a program that follows the [command contract](#command-contract). Starting an agent after every edit would be slow and expensive, so judgment belongs in review.
-- **After each edit:** a hook runs the rule when the edited file matches its `paths` (a rule without `paths` runs after every edit). `MONTEVERDI_CHANGED_FILES` holds just the edited file.
+- **After each edit:** a hook runs the rule when the edited file matches its `paths` (a rule without `paths` runs after every edit). `B_AIDE_CHANGED_FILES` holds just the edited file.
 - **A failure is feedback, not a stop.** The check's output goes straight back to the session, which keeps working and usually fixes the problem next, while the file is still in front of it. Catching it early also saves a round of `submit`.
 - **Any nonzero exit is a failure** (decided 2026-11-19), whether the check found something or the script itself crashed: code doesn't try to tell them apart. Its output goes to the session either way, after an edit and at `submit`; a session that sees a failure outside its code asks for help, and repeated failures escalate as usual (see [When review fails](#when-review-fails)).
-- **No time limit** (decided 2026-11-19). A rule runs as long as it takes; how fast it is stays the project's call. A slow rule slows every matching edit, since the session waits for the hook, and a hanging one stalls the session; both show in the session's progress, and the fix is in the rule. Monteverdi sets the hook's own Claude Code timeout high enough that it never cuts a rule off.
+- **No time limit** (decided 2026-11-19). A rule runs as long as it takes; how fast it is stays the project's call. A slow rule slows every matching edit, since the session waits for the hook, and a hanging one stalls the session; both show in the session's progress, and the fix is in the rule. B-aide sets the hook's own Claude Code timeout high enough that it never cuts a rule off.
 - **Output passes through untrimmed** (decided 2026-11-19). An edit rule checks one file, so its output is normally a few lines; a rule that prints far more is a bug in the rule, which its author sees in the session's progress. (`submit` trims each failure to about 40 lines because whole-project review commands can print thousands.)
 - **Edits made through Bash** don't trigger the hook (decided 2026-11-19): `submit` checks them in the same run, so what's lost is only the timing. To find out whether that matters, code logs which tracked files each Bash call changed (`git status` before and after; nothing runs and the session isn't told). If build sessions turn out to edit code through Bash often, the same hook can cover it then.
 - **Again at `submit`:** code runs every edit rule that matches the change, with the full list of changed files, on the commit it made. **The build step is never trusted**; passing during the build means it should pass here, but only the run code makes at `submit` counts.
@@ -210,7 +210,7 @@ paths: ["src/**/*.tsx"]
 Start the dev server on `$PORT` and open each changed page. ...
 
 Lines flagged for review:
-!`node monteverdi/rules/review/ui-check/flag.mjs`
+!`node b-aide/rules/review/ui-check/flag.mjs`
 ```
 
 - **A review command** (it has `run`) runs a program and reads its exit code, for checks too slow or too broad to run per edit: typecheck, the test suite, lint across the project. **An agent review rule** (no `run`) is instructions, its body, that the review session carries out. **Code tells them apart by `run`** (decided 2026-11-19; was a `kind: command | agent` field, dropped because "kind" also names a publish rule's kind of change, and because code can work it out).
@@ -222,22 +222,22 @@ Lines flagged for review:
 ### How agent rules are enforced
 
 - Code starts a fresh **review session** in the task's worktree whose whole task is the selected agent review rules, each one injected (see [Injected, not invoked](#injected-not-invoked)).
-- The review session must return a **verdict per rule, by name**, through Monteverdi's MCP server: `verdict(rule, pass, problems?, suggest_rule?)`, with each problem as `{file, line?, what, fix}` (see [agents.md](agents.md#review-session-verdict)).
+- The review session must return a **verdict per rule, by name**, through B-aide's MCP server: `verdict(rule, pass, problems?, suggest_rule?)`, with each problem as `{file, line?, what, fix}` (see [agents.md](agents.md#review-session-verdict)).
 - Code checks it received a verdict for every rule it assigned. If any are missing, code resumes the session once to ask for them; **a verdict still missing counts as a failure**, so a skipped rule is caught rather than silently passed.
 - Agent rules run on each task's change only, not at sign-off (decided 2026-11-19).
 - Starting one review session per agent rule would focus each one further at a higher cost; start with one review session and per-rule verdicts.
 
 ### Command contract
 
-What Monteverdi gives a command (an edit rule, a review command, or a publish rule's `run` step), and what it expects back:
+What B-aide gives a command (an edit rule, a review command, or a publish rule's `run` step), and what it expects back:
 
 | | |
 |---|---|
 | Shell | `sh -c "<run>"` (decided 2026-11-19), so `&&`, pipes and `$VAR` work the same on every machine; on Windows, the `sh` that comes with Git for Windows |
 | Working directory | The task worktree: after an edit, as it stands; at `submit` and at merge, at the commit under test. At sign-off, the sign-off worktree, clean, at the merged commit. For a publish step, the publish worktree at the sign-off commit (see [Publish rules](#publish-rules)) |
-| `MONTEVERDI_BASE` | The commit the task branched from, so a script can diff against it. For a publish step, `complete` just before the sign-off merge |
-| `MONTEVERDI_CHANGED_FILES` | Changed file paths, one per line, so a script can examine only what changed. After an edit, just the edited file. For a publish step, every file the endeavor changed (from `MONTEVERDI_BASE` to the sign-off commit) |
-| `MONTEVERDI_NODES` | The node IDs the task builds. For a publish step, every node the endeavor built |
+| `B_AIDE_BASE` | The commit the task branched from, so a script can diff against it. For a publish step, `complete` just before the sign-off merge |
+| `B_AIDE_CHANGED_FILES` | Changed file paths, one per line, so a script can examine only what changed. After an edit, just the edited file. For a publish step, every file the endeavor changed (from `B_AIDE_BASE` to the sign-off commit) |
+| `B_AIDE_NODES` | The node IDs the task builds. For a publish step, every node the endeavor built |
 | Exit code | `0` passes; anything else fails |
 | Output | Shown to the build session on failure (for a publish step, to you). Keep it actionable: file, line, what's wrong, what to do instead |
 
@@ -253,25 +253,25 @@ name: feature
 description: A new feature, shipped through dev to prod.
 steps:
   - run: git push origin HEAD:dev
-  - run: gh pr create --base prod --head dev --title "$MONTEVERDI_TITLE" --body "$MONTEVERDI_SUMMARY"
+  - run: gh pr create --base prod --head dev --title "$B_AIDE_TITLE" --body "$B_AIDE_SUMMARY"
   - confirm: Get the PR approved and merged.
   - run: ./scripts/wait-for-propagation.sh
   - run: git fetch origin && git merge --no-ff origin/prod
 ---
 ```
 
-- **Every procedure starts from the approved commit** (decided 2026-11-19). Steps run in a publish worktree checked out at the endeavor's sign-off commit, and HEAD stays there unless a step moves it. So a rule reads: "HEAD is what was approved; carry it out to the remotes." Remote branches (`dev`, `prod` above) are the project's destinations, named in its steps; Monteverdi knows none of them, so none can be the starting point. Nothing signed off after you pressed slips into this procedure. Where the worktree comes from, and what happens when a step commits (the last step above), is in [agents.md](agents.md#publish).
+- **Every procedure starts from the approved commit** (decided 2026-11-19). Steps run in a publish worktree checked out at the endeavor's sign-off commit, and HEAD stays there unless a step moves it. So a rule reads: "HEAD is what was approved; carry it out to the remotes." Remote branches (`dev`, `prod` above) are the project's destinations, named in its steps; B-aide knows none of them, so none can be the starting point. Nothing signed off after you pressed slips into this procedure. Where the worktree comes from, and what happens when a step commits (the last step above), is in [agents.md](agents.md#publish).
 - **`run`** is a command under the [command contract](#command-contract): exit 0 continues, anything else stops the procedure with its output, and you choose Retry step, Skip step or Abort. No time limit; a Stop control. A step that waits (CI, a deploy propagating) is a slow `run`.
 - **`confirm`** pauses with its text until you press Continue: for what a person does elsewhere. Sign off runs the procedure straight away, so a project that wants to sign off now and ship later starts with a `confirm` step.
-- **The procedure is the project's.** What each kind does is written here, not designed into Monteverdi; a kind with no steps just signs off, and the next procedure that pushes carries it.
+- **The procedure is the project's.** What each kind does is written here, not designed into B-aide; a kind with no steps just signs off, and the next procedure that pushes carries it.
 - **A step's environment** (decided 2026-11-19): the [command contract](#command-contract), with its publish meanings, plus:
 
   | | |
   |---|---|
-  | `MONTEVERDI_SIGNOFF` | The sign-off merge commit, where HEAD starts |
-  | `MONTEVERDI_ENDEAVOR` | The root endeavor's ID |
-  | `MONTEVERDI_TITLE`, `MONTEVERDI_SUMMARY` | The root's title and summary (the explanation's first sentence), copied by code |
-  | `MONTEVERDI_COMPLETE` | `complete`'s branch name, which may be `main` |
+  | `B_AIDE_SIGNOFF` | The sign-off merge commit, where HEAD starts |
+  | `B_AIDE_ENDEAVOR` | The root endeavor's ID |
+  | `B_AIDE_TITLE`, `B_AIDE_SUMMARY` | The root's title and summary (the explanation's first sentence), copied by code |
+  | `B_AIDE_COMPLETE` | `complete`'s branch name, which may be `main` |
   | `PORT` | The publish worktree's own port, for a step that starts the app (a smoke test) |
 
   Your own environment passes through: your credential helper, `gh` login and SSH agent. The project's `.env` is a file in the worktree, not exported, as for every command.
@@ -297,19 +297,19 @@ steps:
 
 1. **Fix loop (automatic).** A failed rule's output or the review session's notes go back to the same build session, resumed with its context. It fixes the problem and submits again. Most failures end here.
 2. **The Answer is wrong.** If the review session or the build session concludes the Answer itself is wrong, it calls `reopen` and the problem goes to a Dialogue on the design node.
-3. **Escalation.** When the loop isn't converging (a rule reaches the [escalation threshold](#escalation-threshold), or the build session says it's stuck), Monteverdi opens a **Dialogue attached to the build task**: `<task-id>.dialogue.md` (task IDs are `<id>.build.<n>`), with the same turns, Findings block, and warm-resume / cold-fresh rules as any Dialogue. The participants are you and the build session itself, resumed, since it knows what it tried. When code escalates, the build session writes the opening turn (what keeps failing, what it tried, what it needs), with every attempt's verdicts and command output appended; see [agents.md](agents.md#build-session-escalation).
+3. **Escalation.** When the loop isn't converging (a rule reaches the [escalation threshold](#escalation-threshold), or the build session says it's stuck), B-aide opens a **Dialogue attached to the build task**: `<task-id>.dialogue.md` (task IDs are `<id>.build.<n>`), with the same turns, Findings block, and warm-resume / cold-fresh rules as any Dialogue. The participants are you and the build session itself, resumed, since it knows what it tried. When code escalates, the build session writes the opening turn (what keeps failing, what it tried, what it needs), with every attempt's verdicts and command output appended; see [agents.md](agents.md#build-session-escalation).
 
 Typical causes for escalation: the build and review sessions disagree, a rule seems wrong for this case, a flaky test, a broken environment, a conflict the session can't resolve.
 
 | Outcome | What happens |
 |---|---|
 | Guidance | "Do it this way." The build session continues and resubmits. |
-| One-time override | You accept the failure for this change. A control in the task's Dialogue; code records it as a commit trailer: `Monteverdi-Override: color-tokens (reason)`. **Only you can grant this, never an agent.** |
+| One-time override | You accept the failure for this change. A control in the task's Dialogue; code records it as a commit trailer: `B-aide-Override: color-tokens (reason)`. **Only you can grant this, never an agent.** |
 | Rule change | The rule is wrong in general. You start the [legislator](agents.md#legislator) from the Dialogue; it changes the rule with you. |
 | Design change | It's a design problem: `reopen` on the node. |
 | Environment fix | The environment or flaky test gets fixed and you say so in the Dialogue; the build session submits its work unchanged. |
 
-**At sign-off**, a failure on the merged result is usually an integration problem no single task owns. Monteverdi creates a **fix task** on the endeavor branch: an ordinary build session, briefed by code with what's wrong, which goes through the same checks, review and escalation as any task (see [agents.md](agents.md#review-fix-tasks-at-sign-off)).
+**At sign-off**, a failure on the merged result is usually an integration problem no single task owns. B-aide creates a **fix task** on the endeavor branch: an ordinary build session, briefed by code with what's wrong, which goes through the same checks, review and escalation as any task (see [agents.md](agents.md#review-fix-tasks-at-sign-off)).
 
 ### Escalation threshold
 
@@ -320,12 +320,12 @@ Decided 2026-11-19. Code's backstop for a loop the build session doesn't notice 
 - **Escalates when the count reaches `escalateAfter`, and on every failure of that rule after** (decided 2026-11-19; no reset). The count keeps rising after an escalation, so once a rule has escalated, each further failure of it goes back to you: code brings the session back to write a turn in the task's Dialogue, which stays open until the task merges, and the task waits for your reply. Neither your guidance nor a change to the rule resets it.
 - **An override takes the rule out of counting** for the rest of the task, since it counts as passed from then on.
 - **Fix tasks at sign-off share one count per rule across the endeavor's fix tasks, and a failure while preparing sign-off counts too** (decided 2026-11-19). Otherwise a check that passes in task worktrees but fails in the sign-off worktree (it relies on an ignored, generated file, say) would start a new fix task forever. An overridden failure at preparation starts no fix and doesn't count. When preparation itself reaches the threshold, the next fix task **starts escalated**: code writes the Dialogue's opening turn (the rule, each failure's output, the earlier fix tasks' commits) and no session starts until you reply, since a fresh session has tried nothing to explain.
-- **A setting of Monteverdi's:** `escalateAfter` in `~/.monteverdi/config.json`, one number for every rule and every project (decided 2026-11-19; first placed in the repo's settings, moved with the other tuning settings), **3** to start, tuned from the failure log: how many submits a rule really takes to pass (see [agents.md](agents.md#measuring-and-tuning)).
+- **A setting of B-aide's:** `escalateAfter` in `~/.b-aide/config.json`, one number for every rule and every project (decided 2026-11-19; first placed in the repo's settings, moved with the other tuning settings), **3** to start, tuned from the failure log: how many submits a rule really takes to pass (see [agents.md](agents.md#measuring-and-tuning)).
 
 ## Improving rules
 
 - The review session's `verdict` can include `suggest_rule`: a proposed change to a build rule (so the problem isn't built in the first place), or a proposal to turn a recurring agent finding into a command (an edit rule if it's fast and per file, otherwise a review command).
-- Monteverdi logs failures per rule, so a rule that keeps failing for the same reason is visible.
+- B-aide logs failures per rule, so a rule that keeps failing for the same reason is visible.
 - The UI shows suggested rule changes with an accept button; accepting starts the [legislator](agents.md#legislator), which changes the rule with you.
 - `suggest_rule` is part of the `verdict` tool from the start; the log and UI come with the UI work.
 

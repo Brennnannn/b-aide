@@ -46,9 +46,9 @@ Per [Anthropic's context-window page][ctx], before you type anything: the system
 - CLAUDE.md is re-sent on every call, so keep it short ([mindstudio][mindstudio]).
 - Run `/context` in a session for the real breakdown of your own setup.
 
-## Controlling startup for sessions Monteverdi starts
+## Controlling startup for sessions B-aide starts
 
-Monteverdi runs `claude` itself, so each session's startup is set by flags, not by whatever is connected in the user's chat app ([CLI reference][cli]):
+B-aide runs `claude` itself, so each session's startup is set by flags, not by whatever is connected in the user's chat app ([CLI reference][cli]):
 
 | Flag | Effect |
 |---|---|
@@ -59,7 +59,7 @@ Monteverdi runs `claude` itself, so each session's startup is set by flags, not 
 | `--setting-sources user,project,local` | Choose which settings files load |
 | `--bare` | Skip hooks, skills, plugins, MCP servers, auto memory and CLAUDE.md; only Bash, Read and Edit |
 | `--plugin-dir <dir>` | Load a specific plugin (with its skills) for this session only |
-| `--append-system-prompt-file <file>` | Add Monteverdi's role instructions to the default system prompt |
+| `--append-system-prompt-file <file>` | Add B-aide's role instructions to the default system prompt |
 | `--system-prompt-file <file>` | Replace the default system prompt entirely |
 | `--model`, `--effort` | Set per role; never change them mid-session |
 | `--max-turns <n>` | Cap agentic turns (print mode only) |
@@ -87,7 +87,7 @@ Claude Code can compact a long conversation you've left idle **before the cache 
 
 ### What compaction costs, loses and saves
 
-Researched 2026-11-10 because compaction isn't yet decided as a standard Monteverdi feature.
+Researched 2026-11-10 because compaction isn't yet decided as a standard B-aide feature.
 
 **One measured compaction on this machine** (an automatic one in another project, read from its transcript's compaction marker):
 
@@ -115,7 +115,7 @@ The smaller the session, the smaller the saving: at 30k of history, compaction c
 
 Those figures assume compacting just before the cache expires. Compacting **after** it has expired, at the moment the session is reactivated, has to read the old context uncached (~169k × 1), so it costs more (~220k equivalents in total for this session), but it's still cheaper than the ~340k plain cold resume, and it never spends anything on a session nobody comes back to.
 
-**Decided for Monteverdi: no compaction.** Compaction pays only when a session is large and resumed cold. Build sessions run continuously, so the only such case is a Dialogue reactivated after its cache expired, and a Dialogue's conversation already lives in its dialogue file. So a cold Dialogue starts a **fresh session that reads the breadcrumb and the dialogue file** instead (see [agents.md](agents.md#dialogue-session)). That costs the startup context (usually cached) plus the file plus whatever code it re-reads, which is cheaper than either a cold resume or a compaction, and it starts from the exact record rather than a lossy summary.
+**Decided for B-aide: no compaction.** Compaction pays only when a session is large and resumed cold. Build sessions run continuously, so the only such case is a Dialogue reactivated after its cache expired, and a Dialogue's conversation already lives in its dialogue file. So a cold Dialogue starts a **fresh session that reads the breadcrumb and the dialogue file** instead (see [agents.md](agents.md#dialogue-session)). That costs the startup context (usually cached) plus the file plus whatever code it re-reads, which is cheaper than either a cold resume or a compaction, and it starts from the exact record rather than a lossy summary.
 
 ## Common advice
 

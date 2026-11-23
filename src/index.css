@@ -48,6 +48,15 @@
     }
 }
 
+/* The title bar (OuterNav) drags the Electron window; anything clickable inside it opts out. */
+.app-drag-region {
+    -webkit-app-region: drag;
+}
+
+.app-drag-region :is(a, button, input, select, textarea, label, [role="button"], [contenteditable], [data-no-drag]) {
+    -webkit-app-region: no-drag;
+}
+
 /* Custom Scrollbar (global) */
 ::-webkit-scrollbar {
     width: 8px;

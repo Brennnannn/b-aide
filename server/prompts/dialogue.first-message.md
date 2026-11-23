@@ -1,5 +1,5 @@
 <!--
-The first message of a Dialogue session. Monteverdi's code assembles it from the parts
+The first message of a Dialogue session. B-aide's code assembles it from the parts
 below, in order, and fills each {placeholder}. Before it starts a session, code has already
 written the user's message into the Dialogue file as the last turn.
 

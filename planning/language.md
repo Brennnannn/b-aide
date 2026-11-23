@@ -1,6 +1,6 @@
-# Monteverdi planning language
+# B-aide planning language
 
-Draft, 2026-11-10. This is how Monteverdi stores a design as a tree of markdown files. Once Monteverdi exists it will have its own place for plans; until then, they live in `planning/`.
+Draft, 2026-11-10. This is how B-aide stores a design as a tree of markdown files. Once B-aide exists it will have its own place for plans; until then, they live in `planning/`.
 
 ## Concepts
 
@@ -27,13 +27,13 @@ A design is **fully designed** when every leaf endeavor is solved.
 
 The root endeavor also has a lifecycle that is stored: `planned` or `working`. It's the one state the tree's structure can't show.
 
-Runtime state that the structure can't show either (which agent is working on a node, whether it's blocked) belongs in Monteverdi's own task state, not in these files.
+Runtime state that the structure can't show either (which agent is working on a node, whether it's blocked) belongs in B-aide's own task state, not in these files.
 
 ## Where files live
 
 ```
 <project>/
-  monteverdi/
+  b-aide/
     rules/                # see rules.md
       dialogue/
       scoping/
@@ -49,9 +49,9 @@ Runtime state that the structure can't show either (which agent is working on a 
         checkout.e81d4.md
 ```
 
-- **In the project repo**, under a plain (not hidden) `monteverdi/` folder that Monteverdi scaffolds. The design is versioned and reviewed with the code. Hidden folders are skipped by ripgrep and most editor search by default, so agents would miss them.
+- **In the project repo**, under a plain (not hidden) `b-aide/` folder that B-aide scaffolds. The design is versioned and reviewed with the code. Hidden folders are skipped by ripgrep and most editor search by default, so agents would miss them.
 - **One flat folder per root endeavor.** Folder depth doesn't cost anything on modern filesystems; flat wins because one listing shows the whole endeavor, sorting by name keeps each subtree together (children share their parent's prefix), and paths stay well under Windows' 260-character MAX_PATH.
-- `~/.monteverdi/` stays for app config (recent folders and so on), not design content.
+- `~/.b-aide/` stays for app config (recent folders and so on), not design content.
 
 ## IDs
 
@@ -60,7 +60,7 @@ Runtime state that the structure can't show either (which agent is working on a 
 - **Segments are stable IDs, not positions.** Sibling order lives in the parent's Sections list, so reordering edits only the parent and never renames a file.
 - The root segment (`checkout`) is a slug chosen when the endeavor is created and never renamed, because every file name starts with it.
 - An ID addresses a node whether it's inline or in its own file. The resolver looks for `<id>.md` first, then for a heading tagged `{#<id>}` in the nearest ancestor's file.
-- Moving a node to a different parent changes its ID and its descendants' IDs. Monteverdi does this as one operation and updates every reference.
+- Moving a node to a different parent changes its ID and its descendants' IDs. B-aide does this as one operation and updates every reference.
 
 ## File format
 
@@ -84,16 +84,16 @@ Receives and verifies Stripe events. ...
 ```
 
 - Each file starts at `#` for its own node. When the UI joins files together, it shifts each file's headings down by that file's depth.
-- **Child endeavors are the next heading level down and carry a full `{#id}`.** A Solution is the next heading level down, titled `Solution`, with no ID. A full ID on every heading means a grep for `checkout.4f1a2.b7d05` finds the node wherever it lives. GitHub shows `{#id}` as literal text; that's accepted, since agents and Monteverdi read these files far more than GitHub does, and a visible ID is easy to point at.
+- **Child endeavors are the next heading level down and carry a full `{#id}`.** A Solution is the next heading level down, titled `Solution`, with no ID. A full ID on every heading means a grep for `checkout.4f1a2.b7d05` finds the node wherever it lives. GitHub shows `{#id}` as literal text; that's accepted, since agents and B-aide read these files far more than GitHub does, and a visible ID is easy to point at.
 - A child that lives in its own file keeps its heading in the parent, followed by one stub line: a link plus its summary.
-- Every file except the root's starts with a link to its parent. The ID already implies the parent; Monteverdi writes this link and checks it so plain markdown viewers can navigate up.
+- Every file except the root's starts with a link to its parent. The ID already implies the parent; B-aide writes this link and checks it so plain markdown viewers can navigate up.
 - Root frontmatter also holds `lifecycle: planned | working` and `publish: <rule>`, the kind of change you picked when creating it (see [agents.md](agents.md#publish)).
 
 ## Splitting
 
 Code decides where to split files, not an agent.
 
-- **Budget:** each file's own content (its node plus inline descendants, not counting split-out files) stays under a token budget. ~3k to start. **A program constant, not a setting** (decided 2026-11-19): it decides how the repo's files are laid out, so everyone on a project must use the same value, or each person's Monteverdi would re-split what another's merged back. Monteverdi's developers tune it from real endeavors; a new value re-splits each repo once, in one commit, and hysteresis keeps it from flipping after.
+- **Budget:** each file's own content (its node plus inline descendants, not counting split-out files) stays under a token budget. ~3k to start. **A program constant, not a setting** (decided 2026-11-19): it decides how the repo's files are laid out, so everyone on a project must use the same value, or each person's B-aide would re-split what another's merged back. B-aide's developers tune it from real endeavors; a new value re-splits each repo once, in one commit, and hysteresis keeps it from flipping after.
 - **Split:** over budget → move the largest inline child subtree into its own file. Repeat until the file fits.
 - **Depth:** headings stop at H6, so an inline node that would need H6 or deeper is split out regardless of size.
 - **Hysteresis:** merge a child back inline only when everything fits under ~¼ of the budget, so nodes near the line don't flip on every edit.
@@ -112,13 +112,13 @@ Code decides where to split files, not an agent.
 
 Markdown can link into a file (`file.md#heading-slug`), but renderers build those anchors from the heading text: they break on rename and get `-1` suffixes for duplicates. They'd also break when a node is split out to its own file.
 
-So references use the **node ID** and Monteverdi resolves them:
+So references use the **node ID** and B-aide resolves them:
 
 ```markdown
 Depends on: [Ledger](checkout.e81d4.31af0)
 ```
 
-That works whether the Ledger is inline or in its own file, and it survives splits and merges. Monteverdi reads `Depends on:` lines to order builds (see [Build](#build)).
+That works whether the Ledger is inline or in its own file, and it survives splits and merges. B-aide reads `Depends on:` lines to order builds (see [Build](#build)).
 
 ## Solutions
 
@@ -148,26 +148,26 @@ Refunds go through Stripe's Refund API, keyed by the original PaymentIntent. ...
   </details>
   ```
 - **The Dialogue lives in its own file**, `<id>.dialogue.md`, next to the node; the UI shows it inline. It doesn't count toward the split budget and isn't included in breadcrumb reads, so a long conversation neither pushes siblings out into their own files nor leaks into other agents' context.
-- **Condensing ("finalize"):** the session finalizes once you've agreed to the decisions (you say "let's do A" and nothing is left open), or when you tell it to. It calls `finalize_answer` or `finalize_sections`, and Monteverdi makes two commits:
+- **Condensing ("finalize"):** the session finalizes once you've agreed to the decisions (you say "let's do A" and nothing is left open), or when you tell it to. It calls `finalize_answer` or `finalize_sections`, and B-aide makes two commits:
   1. **Pre-writeup:** commits the dialogue file as it stands, the full conversation.
-  2. **Writeup:** the session condenses the Dialogue into the Answer and deletes the dialogue file; Monteverdi commits that. You review it like any other change.
+  2. **Writeup:** the session condenses the Dialogue into the Answer and deletes the dialogue file; B-aide commits that. You review it like any other change.
 
   The full conversation is always the version just before the writeup commit, so the `history` tool (see [Agent tools](#agent-tools)) can return it when a session wants to know how a decision was reached.
-- **Who commits:** Dialogue sessions never commit. They share the endeavor worktree, so Monteverdi makes every planning commit there. Between condensings the dialogue file is simply uncommitted on disk. (Build sessions don't commit either: Monteverdi commits each task on `submit`; see [agents.md](agents.md#build-session-git-and-tools).)
+- **Who commits:** Dialogue sessions never commit. They share the endeavor worktree, so B-aide makes every planning commit there. Between condensings the dialogue file is simply uncommitted on disk. (Build sessions don't commit either: B-aide commits each task on `submit`; see [agents.md](agents.md#build-session-git-and-tools).)
 - **Solution → Sections:** when a Dialogue shows the endeavor has several parts, the session shapes the children with three tools, `create_child`, `update_child` and `delete_child`, which write immediately (uncommitted, like the dialogue file). Then `finalize_sections` condenses what was decided for the whole into the endeavor's explanation and closes the Dialogue with the same two commits. What was decided about one child goes in that child's explanation. What's still open about one child becomes its **seed**: an opening Claude turn in that child's new Dialogue that sets out where the discussion stands, so the open question turns up where you'll pick it up. A seed summarizes; it never moves your turns, which code couldn't verify, and the full parent conversation stays reachable with `history`. A node has a Solution *or* Sections, so the parent's Dialogue is always condensed before the switch.
 - **Rearranging Sections:** a Dialogue can also open on a sectioned node, about the split itself; replying after `finalize_sections` opens one. Merging, re-scoping, deleting or adding children is judgment, so there's no mechanism per case: the session uses the same three child tools and finalizes with `finalize_sections`. Deleting a built child removes the node, not its code; what happens to that code is part of the parent's judgment, written into a child's explanation (e.g. a replacement that removes it). A child whose Answer a change invalidates gets `reopen`. Purely mechanical changes (reorder, rename, add an empty child) are UI actions with no session.
 - **Reopening:** adding a Dialogue to a solved Solution reopens it. The session stays open after finalizing, so if you object ("wait a second!") it simply replies, which reopens the node. Solved and reopened are never flags; they follow from whether the node has an Answer and a dialogue file.
 
 ## Sessions
 
-- **One session per Solution's Dialogue, resumed while its cache is warm.** Its line of reasoning lives in the dialogue file, so when a Dialogue is reactivated after the prompt cache has expired, Monteverdi starts a fresh session that reads the breadcrumb and the dialogue file instead of resuming, unless the old session is small enough that resuming costs no more (see [agents.md](agents.md#dialogue-session)).
+- **One session per Solution's Dialogue, resumed while its cache is warm.** Its line of reasoning lives in the dialogue file, so when a Dialogue is reactivated after the prompt cache has expired, B-aide starts a fresh session that reads the breadcrumb and the dialogue file instead of resuming, unless the old session is small enough that resuming costs no more (see [agents.md](agents.md#dialogue-session)).
 - **Builds get a fresh session** per build task, working from the condensed Answers rather than the planning conversation, to keep its context lean.
-- **Monteverdi starts every session itself**, as a separate process. Sessions don't spawn subagents to do Monteverdi's work, so results land in files and git instead of piling up in a parent session's context.
+- **B-aide starts every session itself**, as a separate process. Sessions don't spawn subagents to do B-aide's work, so results land in files and git instead of piling up in a parent session's context.
 - **Claude speaks into the files.** Design conversation happens in Dialogues, not chat. Operational output is still open (see [Open](#open)).
 
 ## Agent tools
 
-Monteverdi runs an MCP server, a thin layer over its local `/api`, and attaches it to every session it starts. It's the agent's single way into Monteverdi. **Every change a session makes to Monteverdi's files goes through these tools** (dialogue turns, Answers, new nodes, build plans): the session passes structured data, and code validates it and writes the files. Sessions that only design or plan therefore get no file-writing tools.
+B-aide runs an MCP server, a thin layer over its local `/api`, and attaches it to every session it starts. It's the agent's single way into B-aide. **Every change a session makes to B-aide's files goes through these tools** (dialogue turns, Answers, new nodes, build plans): the session passes structured data, and code validates it and writes the files. Sessions that only design or plan therefore get no file-writing tools.
 
 | Tool | Does |
 |---|---|
@@ -196,48 +196,48 @@ A terminal command can sit on the same API for people to use; agents use the MCP
 
 ```
 complete                          ← you sign off on merges into this branch
-└─ monteverdi/checkout            ← one branch per root endeavor
-   ├─ monteverdi/checkout/4f1a2   ← one branch + worktree per build task
-   └─ monteverdi/checkout/e81d4
+└─ b-aide/checkout            ← one branch per root endeavor
+   ├─ b-aide/checkout/4f1a2   ← one branch + worktree per build task
+   └─ b-aide/checkout/e81d4
 ```
 
-- **`complete`** is the branch you point Monteverdi at when setting up a repo: a role, not a branch name (decided 2026-11-19). You pick an existing branch, by default the project folder's current one; it may be `main`, or `dev` where `dev` holds the latest working build and a publish rule carries it on to `prod`. A root endeavor merges into it only when you sign off. See [Setting up a repo](#setting-up-a-repo) for what follows when your own folder has it checked out.
+- **`complete`** is the branch you point B-aide at when setting up a repo: a role, not a branch name (decided 2026-11-19). You pick an existing branch, by default the project folder's current one; it may be `main`, or `dev` where `dev` holds the latest working build and a publish rule carries it on to `prod`. A root endeavor merges into it only when you sign off. See [Setting up a repo](#setting-up-a-repo) for what follows when your own folder has it checked out.
 - **Endeavor branch:** created when the root endeavor is created, so planning commits have a home that isn't `complete`. Dialogue sessions run in that branch's worktree.
-- **Task branches:** one per build task, branched from the endeavor branch, each in its own worktree under a short path (for example `~/.monteverdi/wt/<id>`, for MAX_PATH).
-- **Authorship** (order decided 2026-11-19): every commit Monteverdi makes, planning and build alike, is authored by you (the repo's configured git identity) and pushed with your credentials. Co-author trailers follow, in order: the agent that did the work (the model, such as Claude Opus 5.5, or whichever agent is attached in future), then Monteverdi. A commit code makes with no agent's work in it (a sign-off, `Instantiate Monteverdi`, bringing a publish step's commits into `complete`) names Monteverdi alone.
+- **Task branches:** one per build task, branched from the endeavor branch, each in its own worktree under a short path (for example `~/.b-aide/wt/<id>`, for MAX_PATH).
+- **Authorship** (order decided 2026-11-19): every commit B-aide makes, planning and build alike, is authored by you (the repo's configured git identity) and pushed with your credentials. Co-author trailers follow, in order: the agent that did the work (the model, such as Claude Opus 5.5, or whichever agent is attached in future), then B-aide. A commit code makes with no agent's work in it (a sign-off, `Instantiate B-aide`, bringing a publish step's commits into `complete`) names B-aide alone.
 
   ```
-  Monteverdi-Task: checkout.4f1a2.build.1
-  Monteverdi-Node: checkout.4f1a2.b7d05
+  B-aide-Task: checkout.4f1a2.build.1
+  B-aide-Node: checkout.4f1a2.b7d05
   Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-  Co-Authored-By: Monteverdi <monteverdi@users.noreply.github.com>
+  Co-Authored-By: B-aide <b-aide@users.noreply.github.com>
   ```
 
-  `git log --grep "Co-Authored-By: Monteverdi"` lists everything made through Monteverdi. The email is a placeholder: GitHub shows a co-author's avatar only when the email belongs to a GitHub account, and otherwise shows the name alone.
+  `git log --grep "Co-Authored-By: B-aide"` lists everything made through B-aide. The email is a placeholder: GitHub shows a co-author's avatar only when the email belongs to a GitHub account, and otherwise shows the name alone.
 - **Trailers** (gathered 2026-11-19), all written by code:
 
   | Trailer | On | Names |
   |---|---|---|
-  | `Monteverdi-Task: <task-id>` | Every task's commit, build or fix | The task that made the commit |
-  | `Monteverdi-Node: <id>` | A build task's commit, one per node | A node it built; the stale check reads these. Never on a fix task |
-  | `Monteverdi-Override: <rule> (<reason>)` | A task's commit, when you granted an override | The overridden rule and your reason |
-  | `Monteverdi-Prompted-By: <task-id>` | A rule change's commit, when a task prompted it | The escalated or reviewed task |
-  | `Monteverdi-Endeavor: <root id>` | A sign-off merge | The root endeavor signed off |
-- **Worktree setup:** <a id="worktree-setup"></a>every worktree Monteverdi creates (endeavor, task, the sign-off worktree, and the publish worktree) gets the project's dependencies installed, so edit rules can use the project's tools after each edit. The project sets a **setup command** when the repo is set up; Monteverdi suggests one from the lockfile (see [Setting up a repo](#setting-up-a-repo)). With pnpm, packages are hard-linked from its global store, so an unchanged lockfile installs in seconds and uses little disk. When a task edits the manifest or lockfile, Monteverdi re-runs setup in that worktree before the next edit check. **Env files** (decided 2026-11-19): every worktree also gets a copy of every env file git ignores in the project folder, the files `git ls-files --others --ignored --exclude-standard` lists whose name starts with `.env` (skipping `node_modules`), so `.env.local` and a monorepo's `apps/web/.env` come along; tracked ones arrive through git. They're re-copied into every worktree when they change. The root `.env` is still what agent sessions' `${VAR}` values come from. `$PORT` is set in the process's environment, and dotenv-style loaders don't override a variable already set, so a hard-coded `PORT` in `.env` doesn't defeat per-worktree ports.
-- **Rule changes** (decided 2026-11-19) are one of two kinds of commit that reach `complete` without an endeavor sign-off (the other is what a publish step brings back from a remote, which may not touch `monteverdi/rules/`; see [agents.md](agents.md#publish)): the [legislator](agents.md#legislator) works on a branch off `complete`, your Accept moves `complete` forward, and code cherry-picks the commit onto every endeavor branch, so every branch checks against the same rules. They reach the remote like anything else on `complete`, through a [publish](agents.md#publish) procedure.
+  | `B-aide-Task: <task-id>` | Every task's commit, build or fix | The task that made the commit |
+  | `B-aide-Node: <id>` | A build task's commit, one per node | A node it built; the stale check reads these. Never on a fix task |
+  | `B-aide-Override: <rule> (<reason>)` | A task's commit, when you granted an override | The overridden rule and your reason |
+  | `B-aide-Prompted-By: <task-id>` | A rule change's commit, when a task prompted it | The escalated or reviewed task |
+  | `B-aide-Endeavor: <root id>` | A sign-off merge | The root endeavor signed off |
+- **Worktree setup:** <a id="worktree-setup"></a>every worktree B-aide creates (endeavor, task, the sign-off worktree, and the publish worktree) gets the project's dependencies installed, so edit rules can use the project's tools after each edit. The project sets a **setup command** when the repo is set up; B-aide suggests one from the lockfile (see [Setting up a repo](#setting-up-a-repo)). With pnpm, packages are hard-linked from its global store, so an unchanged lockfile installs in seconds and uses little disk. When a task edits the manifest or lockfile, B-aide re-runs setup in that worktree before the next edit check. **Env files** (decided 2026-11-19): every worktree also gets a copy of every env file git ignores in the project folder, the files `git ls-files --others --ignored --exclude-standard` lists whose name starts with `.env` (skipping `node_modules`), so `.env.local` and a monorepo's `apps/web/.env` come along; tracked ones arrive through git. They're re-copied into every worktree when they change. The root `.env` is still what agent sessions' `${VAR}` values come from. `$PORT` is set in the process's environment, and dotenv-style loaders don't override a variable already set, so a hard-coded `PORT` in `.env` doesn't defeat per-worktree ports.
+- **Rule changes** (decided 2026-11-19) are one of two kinds of commit that reach `complete` without an endeavor sign-off (the other is what a publish step brings back from a remote, which may not touch `b-aide/rules/`; see [agents.md](agents.md#publish)): the [legislator](agents.md#legislator) works on a branch off `complete`, your Accept moves `complete` forward, and code cherry-picks the commit onto every endeavor branch, so every branch checks against the same rules. They reach the remote like anything else on `complete`, through a [publish](agents.md#publish) procedure.
 - **Rebase short-lived branches, merge long-lived ones.** A finished task rebases onto the endeavor branch's tip. The endeavor branch takes in `complete` by merging, never rebasing, so task branches built on it keep a valid base.
 
 ### Setting up a repo
 
 Decided 2026-11-19. The `/setup` page has your Claude account, the project folder, **Complete branch** (a dropdown of local branches, defaulting to the folder's current one), **Setup command** (suggested, editable), the env files found, and the checks below. **Set up** saves the settings and makes the scaffolding commit.
 
-- **Checks**, each shown on the page with what to do: the folder is a git repository with at least one commit (Monteverdi doesn't run `git init`: committing your existing files is your call); git is 2.38 or later; no branches named `monteverdi/*` exist yet.
+- **Checks**, each shown on the page with what to do: the folder is a git repository with at least one commit (B-aide doesn't run `git init`: committing your existing files is your call); git is 2.38 or later; no branches named `b-aide/*` exist yet.
 - **No import.** Existing code isn't described by nodes, and nothing tries to work out endeavors from it retroactively. Endeavors refer to existing code through Reuse and scoping's reading; CLAUDE.md, `.claude/skills/` and `.mcp.json` are picked up as decided.
-- **Scaffolding writes only what has content**, as one commit on `complete` titled `Instantiate Monteverdi`, made like a sign-off (no checkout needed): `monteverdi/rules/publish/feature/SKILL.md` (the default rule; see [rules.md](rules.md#publish-rules)), `monteverdi/settings.json` only if you edited the setup command (below), and a short `monteverdi/README.md` saying what the folder is and that it changes through Monteverdi. No empty folders (git doesn't track them; `endeavors/` and the other rule types appear when first used). Anything already there is left alone, so re-running setup, or setting up a clone of a repo that already has it, writes nothing new.
-- **Monteverdi's settings live in Monteverdi's state, not the repo** (decided 2026-11-19): agent models, effort and turn limits, the coming-back thresholds and `escalateAfter` are one set for every project, in `~/.monteverdi/config.json`, dialled in by you (see [agents.md](agents.md#measuring-and-tuning)). They describe how Monteverdi's agents behave and what your account pays, not the project. The split budget is a program constant (see [Splitting](#splitting)).
-- **The one project setting is an edited setup command**, in `monteverdi/settings.json`. Code works the command out from the lockfiles every time (table below), so the file exists only when you've changed it (adding a step that creates a database per worktree, say): that's about the project, and a collaborator's worktrees need it too. A file in the repo has a copy on every branch, so **code reads it only from `complete`** (`git show <complete>:monteverdi/settings.json`), never from a worktree, and **writes it only as a commit on `complete`** when you change the command in the UI, made like `Instantiate Monteverdi`. Endeavor branches never change it (`submit` refuses changes under `monteverdi/`, and the legislator touches only rules), so their copies merge cleanly whenever they take in `complete`. It's versioned and travels with a clone. Per project but outside the repo, in `~/.monteverdi/config.json`, because they're about this machine: the project folder, and which branch is `complete` (code needs it to find the file).
+- **Scaffolding writes only what has content**, as one commit on `complete` titled `Instantiate B-aide`, made like a sign-off (no checkout needed): `b-aide/rules/publish/feature/SKILL.md` (the default rule; see [rules.md](rules.md#publish-rules)), `b-aide/settings.json` only if you edited the setup command (below), and a short `b-aide/README.md` saying what the folder is and that it changes through B-aide. No empty folders (git doesn't track them; `endeavors/` and the other rule types appear when first used). Anything already there is left alone, so re-running setup, or setting up a clone of a repo that already has it, writes nothing new.
+- **B-aide's settings live in B-aide's state, not the repo** (decided 2026-11-19): agent models, effort and turn limits, the coming-back thresholds and `escalateAfter` are one set for every project, in `~/.b-aide/config.json`, dialled in by you (see [agents.md](agents.md#measuring-and-tuning)). They describe how B-aide's agents behave and what your account pays, not the project. The split budget is a program constant (see [Splitting](#splitting)).
+- **The one project setting is an edited setup command**, in `b-aide/settings.json`. Code works the command out from the lockfiles every time (table below), so the file exists only when you've changed it (adding a step that creates a database per worktree, say): that's about the project, and a collaborator's worktrees need it too. A file in the repo has a copy on every branch, so **code reads it only from `complete`** (`git show <complete>:b-aide/settings.json`), never from a worktree, and **writes it only as a commit on `complete`** when you change the command in the UI, made like `Instantiate B-aide`. Endeavor branches never change it (`submit` refuses changes under `b-aide/`, and the legislator touches only rules), so their copies merge cleanly whenever they take in `complete`. It's versioned and travels with a clone. Per project but outside the repo, in `~/.b-aide/config.json`, because they're about this machine: the project folder, and which branch is `complete` (code needs it to find the file).
 - **When a folder has `complete` checked out** (likely: your own folder on `main` or `dev`), code moves `complete` by fast-forwarding that folder (`git merge --ff-only <new>`, after checking its HEAD is still the old tip) instead of `update-ref`, which would move the branch under your files and leave `git status` showing the reverse of the new commits. Every move of `complete` builds on its tip, so it's always a fast-forward. Your uncommitted changes stay; if they touch a file the move changes, git refuses and the move fails: *"Your uncommitted changes in D:\shop touch server/routes.ts, which this sign-off changes. Commit or stash them, then sign off again."*
-- **Your own commits on `complete`** are allowed: they're outside Monteverdi's checks, and every endeavor takes them in the next time it prepares sign-off, where its checks run on the combination. **A hand edit to `monteverdi/rules/`** would break the rules-identical invariant, so when code finds `complete` moved by a commit it didn't make, it applies just the `monteverdi/rules/` part onto every endeavor branch, each under its merge lock, as Accept does. Rules are yours to decide, so a hand edit counts as yours.
+- **Your own commits on `complete`** are allowed: they're outside B-aide's checks, and every endeavor takes them in the next time it prepares sign-off, where its checks run on the combination. **A hand edit to `b-aide/rules/`** would break the rules-identical invariant, so when code finds `complete` moved by a commit it didn't make, it applies just the `b-aide/rules/` part onto every endeavor branch, each under its merge lock, as Accept does. Rules are yours to decide, so a hand edit counts as yours.
 - **The setup command** is suggested from one table, which also says which edited files re-run setup in a worktree:
 
   | Lockfile | Suggested command | Re-run when edited |
@@ -251,13 +251,13 @@ Decided 2026-11-19. The `/setup` page has your Claude account, the project folde
   | `Gemfile.lock` | `bundle install` | it, `Gemfile` |
   | `Cargo.lock` / `go.sum` | `cargo fetch` / `go mod download` | it, `Cargo.toml` / `go.mod` |
 
-  Several lockfiles (a monorepo) join their commands with `&&`; none means no setup. A hand-written command re-runs when any lockfile in the table changes. **Later:** the table becomes per-stack extensions you load (Node, Python, …), so Monteverdi doesn't assume a stack; it covers the common ones until then.
+  Several lockfiles (a monorepo) join their commands with `&&`; none means no setup. A hand-written command re-runs when any lockfile in the table changes. **Later:** the table becomes per-stack extensions you load (Node, Python, …), so B-aide doesn't assume a stack; it covers the common ones until then.
 
 ### Merging a task
 
 Decided 2026-11-19 (replaces the test station; full design in [agents.md](agents.md#review-where-a-task-is-checked)). A task is checked in its own worktree, which has the project's dependencies, copies of the project folder's ignored env files (git doesn't track them, so no worktree gets them on its own; see [Worktree setup](#worktree-setup)) and its own port. Nothing reaches the endeavor branch until every check has passed.
 
-1. The build session finishes and calls `submit`. Monteverdi commits the worktree and applies the task onto the endeavor branch's tip as one commit, in the worktree; on a conflict it leaves the markers for the build session to resolve (it knows what its changes are for), and the session submits again.
+1. The build session finishes and calls `submit`. B-aide commits the worktree and applies the task onto the endeavor branch's tip as one commit, in the worktree; on a conflict it leaves the markers for the build session to resolve (it knows what its changes are for), and the session submits again.
 2. The mechanical [rules](#rules) run in the worktree, at that commit, while the build session waits. Tasks are checked in parallel, each in its own worktree.
 3. If any agent review rules are selected, a fresh review session reviews the change in the same worktree.
 4. A rule fails → back to the build session in its worktree with the failure, then repeat from step 1. If the loop doesn't converge, it escalates to a Dialogue attached to the task, between you and the build session (see [rules.md](rules.md#when-review-fails)).
@@ -265,7 +265,7 @@ Decided 2026-11-19 (replaces the test station; full design in [agents.md](agents
 
 ### Rules
 
-Review runs the project's **edit and review rules** (in `monteverdi/rules/edit/` and `monteverdi/rules/review/`). All selected rules must pass to merge. The full design, including the other three rule types, is in [rules.md](rules.md); in short:
+Review runs the project's **edit and review rules** (in `b-aide/rules/edit/` and `b-aide/rules/review/`). All selected rules must pass to merge. The full design, including the other three rule types, is in [rules.md](rules.md); in short:
 
 1. Code selects rules by the files the change touched; no model decides which run.
 2. **Edit rules** run first. The build session already ran them after each edit; `submit` runs them again, because the build step is never trusted.
@@ -277,21 +277,21 @@ On failure:
 - An agent rule sends the review session's problems back.
 - If the review session decides **the Answer** is wrong, not the code, it opens a Dialogue on the node (the same path as a build that finds an Answer wrong).
 
-**Conflict prevention:** the build plan records the files each task expects to touch (`files`). Monteverdi's code runs tasks whose `files` overlap one after the other, never in parallel.
+**Conflict prevention:** the build plan records the files each task expects to touch (`files`). B-aide's code runs tasks whose `files` overlap one after the other, never in parallel.
 
 ## Build
 
 - **Plan build** is available on any fully designed endeavor, not just the root, so parts can be built while siblings are still being planned.
-- It starts a **scoping session** that sizes the work, decides the build order, and splits it into tasks (often just one), recording the files each task works in (its `files`), the existing code it should reuse, and the design nodes it needs. Build tasks don't have to match Sections one-to-one. Monteverdi then starts one fresh build session per task, each in its own worktree. Detailed design: [agents.md](agents.md#scoping-session).
-- **The plan is a file**, `<id>.build.md`, rendered by Monteverdi from what the scoping session submits: tasks, order, the node IDs each task builds, and its `files`. You can review it before any code is written. "Plan" always means this file.
+- It starts a **scoping session** that sizes the work, decides the build order, and splits it into tasks (often just one), recording the files each task works in (its `files`), the existing code it should reuse, and the design nodes it needs. Build tasks don't have to match Sections one-to-one. B-aide then starts one fresh build session per task, each in its own worktree. Detailed design: [agents.md](agents.md#scoping-session).
+- **The plan is a file**, `<id>.build.md`, rendered by B-aide from what the scoping session submits: tasks, order, the node IDs each task builds, and its `files`. You can review it before any code is written. "Plan" always means this file.
 - **Task IDs** are `<id>.build.<n>` (e.g. `checkout.4f1a2.build.1`); "build" has non-hex letters, so it never clashes with a node segment.
 - **Dependencies:** see [Dependencies](#dependencies).
-- **Build commits carry a trailer**, `Monteverdi-Node: <id>`, one per node built, written by Monteverdi when it commits the task (step 1 above). A node is **built** when such a commit is on the endeavor branch, which in this flow means it passed review. It's **stale** when its Answer changed after that commit.
+- **Build commits carry a trailer**, `B-aide-Node: <id>`, one per node built, written by B-aide when it commits the task (step 1 above). A node is **built** when such a commit is on the endeavor branch, which in this flow means it passed review. It's **stale** when its Answer changed after that commit.
 - **When building shows an Answer is wrong**, the build session doesn't improvise: it opens a Dialogue on that node (making it reopened) and pauses until the Answer is updated.
 
 ### Dependencies
 
-**Agents decide dependencies; Monteverdi enforces them.** Recognizing that Refunds needs the Ledger is a judgment call, made in Refunds' Dialogue (by the session or by you). The result is a line in the node's body:
+**Agents decide dependencies; B-aide enforces them.** Recognizing that Refunds needs the Ledger is a judgment call, made in Refunds' Dialogue (by the session or by you). The result is a line in the node's body:
 
 ```markdown
 ## Refunds {#checkout.4f1a2.b7d05}
@@ -312,4 +312,4 @@ Sessions never write `Depends on:` lines themselves: they pass the IDs as a `dep
 
 ## Open
 
-- **Operational output.** Design conversation lives in the files, but sessions still produce operational output: permission prompts, errors, "blocked on X", progress while carrying out a Solution. These need a home in Monteverdi's UI (permission prompts need a real control, not a reply in a file). Decide when we build the UI.
+- **Operational output.** Design conversation lives in the files, but sessions still produce operational output: permission prompts, errors, "blocked on X", progress while carrying out a Solution. These need a home in B-aide's UI (permission prompts need a real control, not a reply in a file). Decide when we build the UI.

@@ -1,5 +1,5 @@
 <!--
-The first message of a scoping session. Monteverdi's code assembles it from the parts below,
+The first message of a scoping session. B-aide's code assembles it from the parts below,
 in order, and fills each {placeholder}. Paths are relative to the endeavor worktree.
 
 Fresh session (Plan build, no unfinished earlier plan): parts 1, 2, 3, 5a.
@@ -48,7 +48,7 @@ paths in this message are relative to it.
      feedback: fresh: every round (feedback, then response), then this round's.
        Warm: this round only.
      answer_changes: per node, the Answer's diff since the commit the earlier plan was based on.
-     code_changes: git diff --name-only <that commit>..HEAD, leaving out monteverdi/. Marked
+     code_changes: git diff --name-only <that commit>..HEAD, leaving out b-aide/. Marked
        files first, all of them; unmarked ones up to 25, then a count and the path of the
        full list in the run folder. -->
 <earlier_plan>

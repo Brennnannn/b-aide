@@ -1,4 +1,4 @@
-# Monteverdi /setup flow
+# B-aide /setup flow
 
 The `/api` routes are Vite middleware (`server/api.ts`), mounted on both the dev and preview servers. The client for them is `src/lib/api.ts`.
 
@@ -11,8 +11,8 @@ The `/api` routes are Vite middleware (`server/api.ts`), mounted on both the dev
 
 ## Finding the CLI and signing in
 
-`findClaudeCli` checks, in order: `MONTEVERDI_CLAUDE_BIN`, then `where`/`which claude`, then `~/.local/bin`, then the newest copy bundled with the Claude desktop app under `%LOCALAPPDATA%\Claude-Data`. Sign-in runs `claude auth login --claudeai` in its own detached console window. The CLI's environment has host `CLAUDE_CODE_*` variables removed. The page polls status every 2 seconds, for up to 5 minutes.
+`findClaudeCli` checks, in order: `B_AIDE_CLAUDE_BIN`, then `where`/`which claude`, then `~/.local/bin`, then the newest copy bundled with the Claude desktop app under `%LOCALAPPDATA%\Claude-Data`. Sign-in runs `claude auth login --claudeai` in its own detached console window. The CLI's environment has host `CLAUDE_CODE_*` variables removed. The page polls status every 2 seconds, for up to 5 minutes.
 
 ## Where the choices are saved
 
-`~/.monteverdi/config.json` holds `projectDir` and `recentDirs`. `recentDirs` keeps the newest 5, with the chosen folder moved to the front.
+`~/.b-aide/config.json` holds `projectDir` and `recentDirs`. `recentDirs` keeps the newest 5, with the chosen folder moved to the front.

@@ -10,7 +10,7 @@ const exe = isWindows ? 'claude.exe' : 'claude'
 
 /**
  * The environment the CLI runs with, minus what a host Claude Code session injects (when
- * Monteverdi is started from inside one). Without this, `auth status` reports the host's
+ * B-aide is started from inside one). Without this, `auth status` reports the host's
  * borrowed auth instead of the CLI's own sign-in. `CLAUDE_CODE_OAUTH_TOKEN` is a user setting
  * (from `claude setup-token`), so it stays.
  */
@@ -65,11 +65,11 @@ async function onPath(): Promise<string | null> {
 }
 
 /**
- * Finds the Claude CLI: `MONTEVERDI_CLAUDE_BIN`, then PATH, then the native installer's
+ * Finds the Claude CLI: `B_AIDE_CLAUDE_BIN`, then PATH, then the native installer's
  * `~/.local/bin`, then the copy bundled with the Claude desktop app.
  */
 export async function findClaudeCli(): Promise<string | null> {
-  const fromEnv = process.env.MONTEVERDI_CLAUDE_BIN
+  const fromEnv = process.env.B_AIDE_CLAUDE_BIN
   if (fromEnv && existsSync(fromEnv)) return fromEnv
   const local = path.join(homedir(), '.local', 'bin', exe)
   return (await onPath()) ?? (existsSync(local) ? local : null) ?? desktopBundledCli()

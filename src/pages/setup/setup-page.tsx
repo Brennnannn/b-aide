@@ -21,7 +21,7 @@ function ContinueButton({ saving }: { saving: boolean }) {
 
 /**
  * Settings and first-run setup. Reached from the settings button, or by redirect whenever
- * something Monteverdi needs (Claude sign-in, project folder) is missing.
+ * something B-aide needs (Claude sign-in, project folder) is missing.
  */
 export function SetupPage() {
   const { status, error, setStatus } = useStatus()
@@ -53,8 +53,8 @@ export function SetupPage() {
         <h1 className="text-2xl font-semibold">Setup</h1>
         <p className="text-text-muted">
           {status && !status.ready
-            ? 'Monteverdi needs these before it can run.'
-            : 'Your Claude account and the project Monteverdi works in.'}
+            ? 'B-aide needs these before it can run.'
+            : 'Your Claude account and the project B-aide works in.'}
         </p>
       </div>
 

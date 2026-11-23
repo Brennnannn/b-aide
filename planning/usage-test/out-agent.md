@@ -12,8 +12,8 @@ The API is a Vite plugin (`server/api.ts`) mounted under `/api` on the dev/previ
 
 ## Claude CLI and sign-in
 
-`findClaudeCli` (`server/claude-cli.ts`) checks, in order: `MONTEVERDI_CLAUDE_BIN`, then `where`/`which claude`, then `~/.local/bin`, then the newest copy bundled with the desktop app under `%LOCALAPPDATA%\Claude-Data`. It strips the host session's `CLAUDE_CODE_*` variables from the CLI's environment. `startLogin` runs `claude auth login --claudeai` detached, in its own console window (`cmd /c start` on Windows). The page polls `/api/status` until you're logged in.
+`findClaudeCli` (`server/claude-cli.ts`) checks, in order: `B_AIDE_CLAUDE_BIN`, then `where`/`which claude`, then `~/.local/bin`, then the newest copy bundled with the desktop app under `%LOCALAPPDATA%\Claude-Data`. It strips the host session's `CLAUDE_CODE_*` variables from the CLI's environment. `startLogin` runs `claude auth login --claudeai` detached, in its own console window (`cmd /c start` on Windows). The page polls `/api/status` until you're logged in.
 
 ## Where folders are saved
 
-`server/config.ts` writes `projectDir` and `recentDirs` to `~/.monteverdi/config.json`. The most recent folder goes first, and the list keeps 5 at most.
+`server/config.ts` writes `projectDir` and `recentDirs` to `~/.b-aide/config.json`. The most recent folder goes first, and the list keeps 5 at most.
