@@ -1,16 +1,13 @@
 import { useRef, useState } from 'react'
-import { Download, GitPullRequest, Music, Play, Upload } from 'lucide-react'
+import { Bell, Download, GitPullRequest, Music, Play, Upload } from 'lucide-react'
 import { Button, CheckboxField, FormField } from '@ui'
 import { useSettings } from '../../../lib/settings-context'
 import { useStatus } from '../../../lib/status-context'
 import type { Settings } from '../settings-model'
+import { useNotifications, type EndeavorNotification } from '../../../components/notifications/notifications'
+import { getNotificationSound, playNotificationSound, setNotificationSound } from '../../../lib/notification-sound'
+import { endeavorPath } from '../../../lib/endeavor-path'
 import { Group, Hint, useSettingsForm } from './shared'
-
-/**
- * The chosen sound for this app session. TEMPORARY: once the API exists, the file is copied into
- * `~/.b-aide/sounds/` and played from there; until then it plays only until the app reloads.
- */
-let soundUrl: string | null = null
 
 export function NotificationsSection() {
   const { form, setFormField } = useSettingsForm()
@@ -19,8 +16,7 @@ export function NotificationsSection() {
 
   const chooseFile = (file: File | undefined) => {
     if (!file) return
-    if (soundUrl) URL.revokeObjectURL(soundUrl)
-    soundUrl = URL.createObjectURL(file)
+    setNotificationSound(file)
     setFormField('notify.soundFile', file.name)
     rerender((n) => n + 1)
   }
@@ -46,13 +42,42 @@ export function NotificationsSection() {
           <Button onClick={() => fileInput.current?.click()} className="text-xs">
             {form.notify.soundFile ? 'Change' : 'Choose file'}
           </Button>
-          <Button onClick={() => soundUrl && void new Audio(soundUrl).play()} disabled={!soundUrl} className="gap-1.5 text-xs">
+          <Button onClick={playNotificationSound} disabled={!getNotificationSound()} className="gap-1.5 text-xs">
             <Play className="h-3.5 w-3.5" />
             Preview
           </Button>
         </div>
       )}
+      <TestNotificationsButton />
     </Group>
+  )
+}
+
+/**
+ * TEMPORARY: three sample nodes arriving at once, to see the tray stack. Remove once real
+ * notifications fire when a node moves to awaiting action.
+ */
+function TestNotificationsButton() {
+  const { notify } = useNotifications()
+  const { status } = useStatus()
+  const project = status?.projects[0]
+
+  const send = () => {
+    if (!project) return
+    const link = (id: string) => endeavorPath(project, 'working', id)
+    const samples: EndeavorNotification[] = [
+      { id: 'checkout.4f1a2.b7d05.6c2f0', title: 'Refund dialog', activity: { stage: 'dialogue', state: 'discussing', acting: false }, summary: 'Claude replied. Your turn in the Dialogue.', link: link('checkout.4f1a2.b7d05.6c2f0') },
+      { id: 'checkout.4f1a2.b7d05', title: 'Refunds', activity: { stage: 'scoping', state: 'solved', acting: false }, summary: 'The build plan is ready for your approval.', link: link('checkout.4f1a2.b7d05') },
+      { id: 'checkout.4f1a2.b7d05.3e9a1', title: 'Refund API', activity: { stage: 'building', state: 'solved', acting: false }, summary: 'The rule "no-direct-db" failed 3 times. Escalated to you.', link: link('checkout.4f1a2.b7d05.3e9a1') },
+    ]
+    samples.forEach((n, i) => setTimeout(() => notify(n), i * 250))
+  }
+
+  return (
+    <Button onClick={send} disabled={!project} className="self-start gap-1.5 text-xs">
+      <Bell className="h-3.5 w-3.5" />
+      Send test notifications
+    </Button>
   )
 }
 

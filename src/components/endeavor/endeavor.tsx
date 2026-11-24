@@ -1,6 +1,6 @@
 import { useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeftToLine, ChevronRight, ListChecks, ListStart } from 'lucide-react'
+import { ArrowLeftToLine, ChevronRight, ListChecks, ListStart, X } from 'lucide-react'
 import { Card } from '@ui'
 import type { EndeavorActivity, RunStats } from '../../../shared/api-types'
 import { Actions, type ActionItem } from '../actions'
@@ -12,8 +12,10 @@ import { PROGRESS_COLORS, StatusPill, describeActivity, type Progress, activityP
  * - `card`: one of its children. The header and summary; opens `link` when clicked.
  * - `chip`: a one-line pill for dense views like the tree map. Coloured by its progress, with
  *   the icon of its stage (or node state) beside the title.
+ * - `notification`: a card in the notification tray. Like `card`, but with no progress border,
+ *   and an X that dismisses it where the status pill would be. Clicking anywhere else opens `link`.
  */
-export type EndeavorMode = 'full' | 'card' | 'chip'
+export type EndeavorMode = 'full' | 'card' | 'chip' | 'notification'
 
 type EndeavorProps = {
   mode: EndeavorMode
@@ -39,10 +41,14 @@ type EndeavorProps = {
   placeholder?: string
   /** Full only: figures for the agent that's running, shown on a muted line under the input. */
   run?: RunStats
-  /** Card only: the first sentence of its explanation, as the parent lists it. */
+  /** Card and notification: the first sentence of its explanation, as the parent lists it (a notification says what it's waiting for). */
   summary?: string
-  /** Card only: where clicking the card goes. (A chip leaves clicking to whatever holds it.) */
+  /** Card and notification: where clicking the card goes. (A chip leaves clicking to whatever holds it.) */
   link?: string
+  /** Notification only: called by its X. */
+  onDismiss?: () => void
+  /** Notification only: called when it's clicked through to `link`. */
+  onOpen?: () => void
   /**
    * Full and card: the endeavor's ID, which names it for the hero animation. Clicking a child
    * card morphs that card into the main one (and the parent arrow morphs it back), because the
@@ -75,7 +81,7 @@ function heroStyle(heroId?: string): CSSProperties {
  * ```
  */
 export function Endeavor(props: EndeavorProps) {
-  const { mode, title, activity, progress: givenProgress, childCount, parent, children, actions, queued, onSend, placeholder, run, summary, link, heroId } = props
+  const { mode, title, activity, progress: givenProgress, childCount, parent, children, actions, queued, onSend, placeholder, run, summary, link, heroId, onDismiss, onOpen } = props
   const pillColor = activityStyle(activity).color
   const progress = givenProgress ?? activityProgress(activity)
   const progressColor = PROGRESS_COLORS[progress]
@@ -83,6 +89,7 @@ export function Endeavor(props: EndeavorProps) {
   if (mode === 'chip') return <EndeavorChip title={title} activity={activity} progress={progress} childCount={childCount} />
 
   const isActive = mode === 'full'
+  const isNotification = mode === 'notification'
 
   const header = (
     <div
@@ -101,16 +108,50 @@ export function Endeavor(props: EndeavorProps) {
               <ListStart className="h-5 w-5" />
             </span>
           ))}
-        <h2 className={`font-semibold ${isActive ? 'text-lg truncate' : 'text-base break-words'}`}>{title}</h2>
+        <h2 className={`font-semibold ${isActive ? 'text-lg truncate' : 'text-base break-words'}`}>
+          {isNotification && link ? (
+            // Stretched over the whole card (it's `relative`), so clicking anywhere but the X opens it
+            <Link to={link} onClick={onOpen} className="after:absolute after:inset-0 focus:outline-none">
+              {title}
+            </Link>
+          ) : (
+            title
+          )}
+        </h2>
       </div>
       <div className="shrink-0 flex flex-row items-center gap-3">
         <ChildCount count={childCount} />
-        <StatusPill activity={activity} />
+        {isNotification ? (
+          <button
+            type="button"
+            onClick={onDismiss}
+            title="Dismiss"
+            className="relative z-10 -m-1 rounded-md p-1 text-text-muted hover:bg-hover-1 hover:text-text transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : (
+          <StatusPill activity={activity} />
+        )}
       </div>
     </div>
   )
 
   const cardStyle = { borderColor: progressColor, ...heroStyle(heroId) }
+
+  if (isNotification) {
+    // No hero name: the same endeavor may be on the page too, and two elements can't share one
+    return (
+      <Card className="relative flex flex-col overflow-hidden shadow-lg transition-[filter] hover:brightness-110">
+        {header}
+        {summary && (
+          <div className="px-4 pb-3">
+            <p className="text-sm text-text-muted line-clamp-2">{summary}</p>
+          </div>
+        )}
+      </Card>
+    )
+  }
 
   if (!isActive) {
     const card = (
