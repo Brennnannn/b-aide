@@ -1,10 +1,10 @@
-import { useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeftToLine, ChevronRight, ListChecks, ListStart } from 'lucide-react'
 import { Card } from '@ui'
 import type { EndeavorActivity, RunStats } from '../../../shared/api-types'
 import { Actions, type ActionItem } from '../actions'
-import { PROGRESS_COLORS, PROGRESS_LABELS, StatusPill, type Progress, activityProgress, activityStyle } from '../status-pill'
+import { PROGRESS_COLORS, StatusPill, describeActivity, type Progress, activityProgress, activityStyle } from '../status-pill'
 
 /**
  * How much of an endeavor to show:
@@ -24,7 +24,7 @@ type EndeavorProps = {
    * outline. Omit to read it from `activity` alone, which is right for a leaf.
    */
   progress?: Progress
-  /** Full and card: how many of its children are complete, out of how many. Omit, or total 0, for a leaf. */
+  /** How many of its children are complete, out of how many (a chip puts it in its hover text). Omit, or total 0, for a leaf. */
   childCount?: { complete: number; total: number }
   /** Full only: where the parent arrow goes; omit for a root endeavor. */
   parent?: { title: string; link: string }
@@ -43,6 +43,17 @@ type EndeavorProps = {
   summary?: string
   /** Card only: where clicking the card goes. (A chip leaves clicking to whatever holds it.) */
   link?: string
+  /**
+   * Full and card: the endeavor's ID, which names it for the hero animation. Clicking a child
+   * card morphs that card into the main one (and the parent arrow morphs it back), because the
+   * card and the main view of the same endeavor share a `view-transition-name`.
+   */
+  heroId?: string
+}
+
+/** The hero animation's name for an endeavor: a CSS ident, so the ID's dots become dashes. */
+function heroStyle(heroId?: string): CSSProperties {
+  return heroId ? ({ viewTransitionName: `endeavor-${heroId.replace(/[^a-zA-Z0-9_-]/g, '-')}` } as CSSProperties) : {}
 }
 
 /**
@@ -64,12 +75,12 @@ type EndeavorProps = {
  * ```
  */
 export function Endeavor(props: EndeavorProps) {
-  const { mode, title, activity, progress: givenProgress, childCount, parent, children, actions, queued, onSend, placeholder, run, summary, link } = props
+  const { mode, title, activity, progress: givenProgress, childCount, parent, children, actions, queued, onSend, placeholder, run, summary, link, heroId } = props
   const pillColor = activityStyle(activity).color
   const progress = givenProgress ?? activityProgress(activity)
   const progressColor = PROGRESS_COLORS[progress]
 
-  if (mode === 'chip') return <EndeavorChip title={title} activity={activity} progress={progress} />
+  if (mode === 'chip') return <EndeavorChip title={title} activity={activity} progress={progress} childCount={childCount} />
 
   const isActive = mode === 'full'
 
@@ -82,7 +93,7 @@ export function Endeavor(props: EndeavorProps) {
       <div className={`flex flex-row items-center gap-2 ${isActive ? 'min-w-0' : 'max-w-full'}`}>
         {isActive &&
           (parent ? (
-            <Link to={parent.link} title={`Parent: ${parent.title}`} className="shrink-0 rounded-md p-1 hover:bg-hover-1 transition-colors">
+            <Link to={parent.link} viewTransition title={`Parent: ${parent.title}`} className="shrink-0 rounded-md p-1 hover:bg-hover-1 transition-colors">
               <ArrowLeftToLine className="h-5 w-5" />
             </Link>
           ) : (
@@ -99,11 +110,11 @@ export function Endeavor(props: EndeavorProps) {
     </div>
   )
 
-  const cardStyle = { borderColor: progressColor }
+  const cardStyle = { borderColor: progressColor, ...heroStyle(heroId) }
 
   if (!isActive) {
     const card = (
-      <Card className="flex flex-col shrink-0 overflow-hidden border-2 border-transparent transition-colors hover:brightness-110" style={cardStyle}>
+      <Card className="endeavor-hero flex flex-col shrink-0 overflow-hidden border-2 border-transparent transition-colors hover:brightness-110" style={cardStyle}>
         {header}
         {/* Padding on the wrapper: line-clamp clips at the padding edge, so padding on the <p> would show the next line */}
         {summary && (
@@ -114,7 +125,7 @@ export function Endeavor(props: EndeavorProps) {
       </Card>
     )
     return link ? (
-      <Link to={link} className="block shrink-0">
+      <Link to={link} viewTransition className="block shrink-0">
         {card}
       </Link>
     ) : (
@@ -123,7 +134,7 @@ export function Endeavor(props: EndeavorProps) {
   }
 
   return (
-    <Card className="flex flex-col h-full min-h-0 overflow-hidden border-2 border-transparent transition-colors" style={cardStyle}>
+    <Card className="endeavor-hero flex flex-col h-full min-h-0 overflow-hidden border-2 border-transparent transition-colors" style={cardStyle}>
       {header}
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">{children}</div>
@@ -150,12 +161,12 @@ export function Endeavor(props: EndeavorProps) {
  * The chip: outline and a light fill in the progress colour, then the stage's icon in the stage's colour (or the node state's, between stages) and the title. Fills the
  * height of whatever holds it, so a container like the tree map can size it.
  */
-function EndeavorChip({ title, activity, progress }: { title: string; activity: EndeavorActivity; progress: Progress }) {
-  const { name, color: iconColor, icon: Icon } = activityStyle(activity)
+function EndeavorChip({ title, activity, progress, childCount }: { title: string; activity: EndeavorActivity; progress: Progress; childCount?: { complete: number; total: number } }) {
+  const { color: iconColor, icon: Icon } = activityStyle(activity)
   const color = PROGRESS_COLORS[progress]
   return (
     <span
-      title={`${name} is ${PROGRESS_LABELS[progress]}`}
+      title={describeActivity(activity, progress, childCount)}
       className="inline-flex h-full min-h-6 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-[13px] transition-colors"
       style={{
         borderColor: color,

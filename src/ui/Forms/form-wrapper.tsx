@@ -44,6 +44,8 @@ export type FormContextType = {
     setField: (value: inputValue) => void;
     errors?: string[];
     setErrors: (params: SetErrorParams) => void;
+    /** Drops the field's validator, so a field that's no longer rendered can't block submit. */
+    clearErrors: () => void;
 };
 
 export type SetErrorParams = {
@@ -244,7 +246,8 @@ export function FormWrapper<TForm extends object>({ initial, children, className
                     validation: (value) => validator({ value, conditions: errors })
                 };
                 dispatchErrors({ type: fieldName, value: newError });
-            }
+            },
+            clearErrors: () => dispatchErrors({ type: fieldName, value: null })
         };
     }
 

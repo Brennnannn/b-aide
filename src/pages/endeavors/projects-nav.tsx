@@ -28,7 +28,7 @@ export function ChooseProjectPage() {
       ) : (
         <>
           No projects yet. Add a project folder in{' '}
-          <Link to="/settings" className="text-primary hover:underline">
+          <Link to="/setup" className="text-primary hover:underline">
             settings
           </Link>
           .

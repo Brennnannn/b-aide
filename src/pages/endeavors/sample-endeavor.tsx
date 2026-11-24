@@ -191,7 +191,7 @@ export function isSampleId(id: string | undefined): id is string {
  * TEMPORARY: generated filler endeavors, shown only in the tree map (no links), so the map has
  * a tree big enough to scrub. Seeded, so the same filler appears on every load. Like real
  * endeavors, only leaves can be Built (about half are, so whole subtrees finish and go green);
- * a node that gets children is Sectioned.
+ * a node that gets children is Split (`sectioned`).
  */
 const mapFiller: (SampleNode & { id: string; parentId: string })[] = (() => {
   const words = ['Tax', 'Invoices', 'Coupons', 'Receipts', 'Fraud checks', 'Currency', 'Retries', 'Audit log', 'Payouts',
@@ -279,7 +279,7 @@ export function SampleWorkPane({ project, status, id }: SampleWorkPaneProps) {
       link: node.id in sampleTree ? link(node.id) : undefined,
       // Green climbs the tree: a line turns green once everything below it is complete
       lineColor: nodeProgress === 'complete' ? ENDEAVOR_COLORS.complete : undefined,
-      content: <Endeavor mode="chip" title={node.title} activity={node.activity} progress={nodeProgress} />,
+      content: <Endeavor mode="chip" title={node.title} activity={node.activity} progress={nodeProgress} childCount={childCount(node.id)} />,
     }
   })
 
@@ -314,6 +314,7 @@ export function SampleWorkPane({ project, status, id }: SampleWorkPaneProps) {
         main={
           <Endeavor
             mode="full"
+            heroId={id}
             title={node.title}
             childCount={childCount(id)}
             parent={parent ? { title: sampleTree[parent]?.title ?? parent, link: link(parent) } : undefined}
@@ -352,6 +353,7 @@ export function SampleWorkPane({ project, status, id }: SampleWorkPaneProps) {
             <Endeavor
               key={child}
               mode="card"
+              heroId={child}
               title={title}
               summary={summary}
               activity={activity}

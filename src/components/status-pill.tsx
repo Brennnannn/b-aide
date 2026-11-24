@@ -20,6 +20,9 @@ export const ENDEAVOR_COLORS = {
 /** `label` is what the pill says ("Building"); `name` is the stage or state as a noun ("Build"), for sentences. */
 type ActivityStyle = { label: string; name: string; color: string; icon: LucideIcon }
 
+/** A node state also says, in a few words, what it means for the node: the map's hover text between stages. */
+type StateStyle = ActivityStyle & { describe: string }
+
 /** Every stage's label, colour and icon, in one place: anything that shows a stage reads it from here. */
 export const STAGE_STYLES: Record<EndeavorStage, ActivityStyle> = {
   dialogue: { label: 'Dialoguing', name: 'Dialogue', color: ENDEAVOR_COLORS.dialogue, icon: MessageCircle },
@@ -34,14 +37,15 @@ export const STAGE_STYLES: Record<EndeavorStage, ActivityStyle> = {
  * green with a check. The rest borrow the icon of the stage they're waiting on: Solved is ready
  * to scope; every other state still has Dialogue to do (a leaf or a splitting branch alike).
  */
-export const STATE_STYLES: Record<NodeState, ActivityStyle> = {
-  open: { label: 'Open', name: 'Open', color: ENDEAVOR_COLORS.idle, icon: MessageCircle },
-  sectioned: { label: 'Sectioned', name: 'Sectioned', color: ENDEAVOR_COLORS.idle, icon: MessageCircle },
-  discussing: { label: 'Discussing', name: 'Discussing', color: ENDEAVOR_COLORS.idle, icon: MessageCircle },
-  solved: { label: 'Solved', name: 'Solved', color: ENDEAVOR_COLORS.idle, icon: Summary },
-  reopened: { label: 'Reopened', name: 'Reopened', color: ENDEAVOR_COLORS.idle, icon: MessageCircle },
-  built: { label: 'Built', name: 'Built', color: ENDEAVOR_COLORS.complete, icon: Check },
-  stale: { label: 'Stale', name: 'Stale', color: ENDEAVOR_COLORS.idle, icon: MessageCircle },
+export const STATE_STYLES: Record<NodeState, StateStyle> = {
+  open: { label: 'Open', name: 'Open', color: ENDEAVOR_COLORS.idle, icon: MessageCircle, describe: 'Open, no response yet' },
+  // Stored as `sectioned` (language.md); shown as Split, which says what happened to it
+  sectioned: { label: 'Split', name: 'Split', color: ENDEAVOR_COLORS.idle, icon: MessageCircle, describe: 'Split into sections' },
+  discussing: { label: 'Discussing', name: 'Discussing', color: ENDEAVOR_COLORS.idle, icon: MessageCircle, describe: 'In Dialogue, no Answer yet' },
+  solved: { label: 'Solved', name: 'Solved', color: ENDEAVOR_COLORS.idle, icon: Summary, describe: 'Solved, ready to scope' },
+  reopened: { label: 'Reopened', name: 'Reopened', color: ENDEAVOR_COLORS.idle, icon: MessageCircle, describe: 'Reopened, back in Dialogue' },
+  built: { label: 'Built', name: 'Built', color: ENDEAVOR_COLORS.complete, icon: Check, describe: 'Built' },
+  stale: { label: 'Stale', name: 'Stale', color: ENDEAVOR_COLORS.idle, icon: MessageCircle, describe: 'Stale, its Answer changed since the build' },
 }
 
 /**
@@ -110,6 +114,26 @@ export function rollUpProgress(nodes: { id: string; parentId: string | null; act
   }
   for (const node of nodes) visit(node.id)
   return progress
+}
+
+/**
+ * A node's hover text in the map. While a stage is under way it's the stage and its progress
+ * ("Build is working"); between stages, a parent counts its sections and a leaf says its state.
+ *
+ * @example
+ * ```ts
+ * describeActivity({ stage: 'building', state: 'solved', acting: true }, 'working') // 'Build is working'
+ * describeActivity(idle('sectioned'), 'needs-work', { complete: 2, total: 4 }) // 'Split into 4 sections, 2 complete'
+ * describeActivity(idle('solved'), 'needs-work') // 'Solved, ready to scope'
+ * ```
+ */
+export function describeActivity(activity: EndeavorActivity, progress: Progress, childCount?: { complete: number; total: number }) {
+  if (activity.stage) return `${STAGE_STYLES[activity.stage].name} is ${PROGRESS_LABELS[progress]}`
+  if (childCount && childCount.total > 0) {
+    const { complete, total } = childCount
+    return `Split into ${total} section${total === 1 ? '' : 's'}, ${complete === total ? 'all' : complete} complete`
+  }
+  return STATE_STYLES[activity.state].describe
 }
 
 /** The label, colour and icon shown for an endeavor's activity: its stage if one is under way, else its node state. */

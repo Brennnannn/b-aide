@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @source "./ui";
 
+/* `data-theme` on <html> (set from Settings > General) decides dark mode, not the OS directly */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme {
     --color-primary: #0353A4;
     --color-secondary: #FFB800;
@@ -31,21 +34,21 @@
     --trim: theme('colors.gray.200');
     --scrollbar-thumb: var(--trim);
     --scrollbar-track: transparent;
+    color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --background: theme('colors.gray.900');
-        --surface: theme('colors.gray.800');
-        --hover-1: theme('colors.gray.800');
-        --hover-2: theme('colors.gray.700');
-        --hover-3: theme('colors.gray.600');
-        --text: theme('colors.white');
-        --text-muted: theme('colors.gray.400');
-        --trim: theme('colors.gray.700');
-        --scrollbar-thumb: var(--trim);
-        --scrollbar-track: transparent;
-    }
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --background: theme('colors.gray.900');
+    --surface: theme('colors.gray.800');
+    --hover-1: theme('colors.gray.800');
+    --hover-2: theme('colors.gray.700');
+    --hover-3: theme('colors.gray.600');
+    --text: theme('colors.white');
+    --text-muted: theme('colors.gray.400');
+    --trim: theme('colors.gray.700');
+    --scrollbar-thumb: var(--trim);
+    --scrollbar-track: transparent;
 }
 
 /* The title bar (OuterNav) drags the Electron window; anything clickable inside it opts out. */
@@ -93,4 +96,37 @@ body,
 #app {
     height: 100%;
     margin: 0;
+}
+
+/*
+ * Endeavor hero animation (`Endeavor`'s `heroId`): a child card grows into the main view, or the
+ * main view shrinks back into its card. The box animates its size and position; inside it the
+ * old and new snapshots keep their own size, pinned top-left and clipped by the box, so the
+ * header stays sharp and the body is revealed (or hidden) rather than stretched.
+ */
+.endeavor-hero {
+    view-transition-class: endeavor-hero;
+}
+
+::view-transition-group(*.endeavor-hero) {
+    animation-duration: 320ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+    overflow: clip;
+    border-radius: 0.5rem;
+}
+
+::view-transition-old(*.endeavor-hero),
+::view-transition-new(*.endeavor-hero) {
+    height: 100%;
+    object-fit: none;
+    object-position: left top;
+    animation-duration: 320ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+        animation: none !important;
+    }
 }

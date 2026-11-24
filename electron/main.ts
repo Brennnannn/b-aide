@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme, shell } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { startAppServer } from './app-server'
@@ -33,6 +33,36 @@ async function startDevServer() {
   const url = server.resolvedUrls?.local[0]
   if (!url) throw new Error('Vite started without a local URL')
   return url
+}
+
+/**
+ * The default menu, minus accelerators the page binds itself (Settings > Keybinds): Window >
+ * Minimize (Ctrl+M toggles the endeavor map) and View > Reload (Ctrl+R opens Rules). A menu
+ * accelerator fires before the page sees the key. The menu bar itself is hidden
+ * (`titleBarStyle: 'hidden'`); it's kept for its accelerators (copy/paste, zoom, devtools).
+ * Minimize is still the overlay's button; force reload (Ctrl+Shift+R) stays in development only.
+ */
+function setAppMenu() {
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      { role: 'fileMenu' },
+      { role: 'editMenu' },
+      {
+        label: 'View',
+        submenu: [
+          ...(isDev ? [{ role: 'forceReload' as const }] : []),
+          { role: 'toggleDevTools' },
+          { type: 'separator' },
+          { role: 'resetZoom' },
+          { role: 'zoomIn' },
+          { role: 'zoomOut' },
+          { type: 'separator' },
+          { role: 'togglefullscreen' },
+        ],
+      },
+      { label: 'Window', submenu: [{ role: 'close' }] },
+    ]),
+  )
 }
 
 function createWindow(url: string) {
@@ -87,6 +117,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   void app.whenReady().then(async () => {
+    setAppMenu()
     const url = isDev ? await startDevServer() : await startAppServer(path.join(root, 'dist'))
     win = createWindow(url)
     win.on('closed', () => (win = null))

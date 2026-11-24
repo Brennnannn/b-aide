@@ -22,10 +22,11 @@ function useFieldBinding(fieldName: string, validation?: (value: inputValue) => 
     if (!fieldContext) {
         throw new Error("Form fields must be used within a FormWrapper");
     }
-    const { field, setField, errors, setErrors } = fieldContext(fieldName);
+    const { field, setField, errors, setErrors, clearErrors } = fieldContext(fieldName);
 
     const validationRef = useRef(validation);
     const setErrorsRef = useRef(setErrors);
+    const clearErrorsRef = useRef(clearErrors);
     const validationRunnerRef = useRef((value: inputValue) => validationRef.current?.(value));
 
     useEffect(() => {
@@ -34,12 +35,14 @@ function useFieldBinding(fieldName: string, validation?: (value: inputValue) => 
 
     useEffect(() => {
         setErrorsRef.current = setErrors;
-    }, [setErrors]);
+        clearErrorsRef.current = clearErrors;
+    }, [setErrors, clearErrors]);
 
-    useEffect(() => {   //Instantiate validate for use by wrapper
+    useEffect(() => {   //Instantiate validate for use by wrapper; unmounting drops it, so a hidden or removed field can't block submit
         if (validationRef.current) {
             setErrorsRef.current({ errors: [validationRunnerRef.current] });
         }
+        return () => clearErrorsRef.current();
     }, []);
 
     useEffect(() => {   //Run validation on change after field has been touched
@@ -173,6 +176,50 @@ export function TitleField<TForm extends object = Record<string, unknown>>({ ...
             label="Title"
             validation={required}
         />
+    )
+}
+
+type CheckboxFieldProps<TForm extends object = Record<string, unknown>> = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'checked'> & {
+    fieldName: Path<TForm>;
+    label?: string;
+    info?: string;
+};
+
+/**
+ * A controlled checkbox bound to a boolean on `FormWrapper` state, with its label beside it.
+ *
+ * @param {Path<TForm>} fieldName - Dot-path key on the form state; holds a boolean
+ * @param {string} [label] - Display label; auto-derived from camelCase fieldName if omitted
+ * @param {string} [info] - Tooltip text shown as an info icon next to the label
+ *
+ * @example
+ * ```tsx
+ * <CheckboxField fieldName="projectRule" label="Project rule" />
+ * ```
+ */
+export function CheckboxField<TForm extends object = Record<string, unknown>>({ fieldName, label, info, className, ...inputProps }: CheckboxFieldProps<TForm>) {
+    const fieldNameString = String(fieldName);
+    const { field, setField, errors, onBlur } = useFieldBinding(fieldNameString);
+
+    const displayLabel = label ?? fieldNameString.replace(/([A-Z])/g, ' $1').trim();
+
+    return (
+        <div className="flex flex-col">
+            <div className="flex flex-row gap-2 items-center">
+                <input
+                    {...inputProps}
+                    id={fieldNameString}
+                    type="checkbox"
+                    className={twMerge("h-4 w-4 accent-primary cursor-pointer", className)}
+                    checked={Boolean(field)}
+                    // The binding is typed for input values; a checkbox stores a boolean
+                    onChange={e => setField(e.target.checked as unknown as inputValue)}
+                    onBlur={onBlur}
+                />
+                <FieldLabel fieldNameString={fieldNameString} label={displayLabel} info={info} />
+            </div>
+            <ErrorHandler messages={errors} />
+        </div>
     )
 }
 

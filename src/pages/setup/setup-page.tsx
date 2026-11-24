@@ -20,8 +20,8 @@ function ContinueButton({ saving }: { saving: boolean }) {
 }
 
 /**
- * Settings and first-run setup. Reached from the settings button, or by redirect whenever
- * something B-aide needs (Claude sign-in, project folder) is missing.
+ * First-run setup (`/setup`). Reached by redirect whenever something B-aide needs (Claude
+ * sign-in, project folder) is missing.
  */
 export function SetupPage() {
   const { status, error, setStatus } = useStatus()

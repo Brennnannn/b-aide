@@ -99,6 +99,24 @@ export function FormArray<TItem extends object>({
     )
 }
 
+/**
+ * Resolves a leaf key to its full path within the current `FormArray` item, for fields
+ * `ArrayField` doesn't cover (a `SelectField`, or one that reads a sibling's value).
+ *
+ * @example
+ * ```tsx
+ * const path = useArrayFieldPath();
+ * <SelectField fieldName={path("type")} options={options} />
+ * ```
+ */
+export function useArrayFieldPath() {
+    const context = useContext(ArrayFieldContext);
+    if (!context) {
+        throw new Error("useArrayFieldPath must be used within a FormArray item");
+    }
+    return context.getFieldPath;
+}
+
 type ArrayFieldProps = Omit<React.ComponentProps<typeof FormField<Record<string, unknown>>>, "fieldName"> & {
     fieldName: string;
 };

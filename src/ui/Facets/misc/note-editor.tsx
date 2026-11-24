@@ -113,14 +113,15 @@ export function NoteEditor({ content, updateContent, readonly = false, expanded 
     );
 }
 
+/** Dark when <html> has `data-theme="dark"` (the app's theme setting), tracking changes to it. */
 function usePrefersDark() {
-    const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const isDark = () => document.documentElement.dataset.theme === 'dark';
+    const [dark, setDark] = useState(isDark);
 
     useEffect(() => {
-        const query = window.matchMedia('(prefers-color-scheme: dark)');
-        const handleChange = (e: MediaQueryListEvent) => setDark(e.matches);
-        query.addEventListener('change', handleChange);
-        return () => query.removeEventListener('change', handleChange);
+        const observer = new MutationObserver(() => setDark(isDark()));
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+        return () => observer.disconnect();
     }, []);
 
     return dark;

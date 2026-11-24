@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { ListTodo, Settings, SlidersHorizontal } from 'lucide-react'
 import { navLink } from '@ui'
 import { OuterNav } from './nav/outer-nav'
 import { NavCenterTargetContext } from './nav/nav-center'
+import { useKeybind } from '../lib/settings-context'
 import { useStatus } from '../lib/status-context'
 
 const mainNav = [
@@ -15,7 +16,7 @@ const mainNav = [
 /**
  * The outermost layout every page renders inside: the nav bar (which is also the window's
  * title bar, see `OuterNav`), then the route. Until setup is complete (Claude CLI signed in,
- * project folder chosen) every route redirects to /settings. Once it is, `/` opens Endeavors.
+ * project folder chosen) every route redirects to /setup. Once it is, `/` opens Endeavors.
  *
  * The nav bar's center slot belongs to the current page: pages fill it with `<NavCenter>`.
  */
@@ -24,10 +25,11 @@ export function AppShell() {
   const { pathname } = useLocation()
   const [centerEl, setCenterEl] = useState<HTMLElement | null>(null)
 
-  if (status && !status.ready && pathname !== '/settings') return <Navigate to="/settings" replace />
+  if (status && !status.ready && pathname !== '/setup') return <Navigate to="/setup" replace />
 
   return (
     <NavCenterTargetContext.Provider value={centerEl}>
+      <PageKeybinds />
       <div className="flex flex-col h-full w-full overflow-hidden bg-background text-text">
         <OuterNav
           navItems={[mainNav]}
@@ -40,4 +42,13 @@ export function AppShell() {
       </div>
     </NavCenterTargetContext.Provider>
   )
+}
+
+/** The keybinds that open a page (Settings > Keybinds). */
+function PageKeybinds() {
+  const navigate = useNavigate()
+  useKeybind('endeavors', () => navigate('/endeavors'))
+  useKeybind('rules', () => navigate('/rules'))
+  useKeybind('settings', () => navigate('/settings'))
+  return null
 }
